@@ -1,0 +1,12 @@
+"use client";
+
+import { FormEvent } from "react";
+import { AlertTriangle, HeartPulse, MapPin, Send, UsersRound } from "lucide-react";
+
+export function CitizenDashboard() {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    event.currentTarget.reset();
+  }
+  return <><div className="page-heading"><div><p className="eyebrow">Citizen response desk</p><h1>Report an emergency</h1></div><span className="login-note">No login required</span></div><div className="citizen-actions"><button type="button" className="report-action"><AlertTriangle size={28} /><strong>Report an emergency</strong><span>Send critical details to the response team</span></button><a href="/citizen/volunteer" className="volunteer-action"><UsersRound size={24} /><strong>Volunteer to help</strong><span>Offer your time, vehicle, or skills</span></a></div><form className="citizen-form clay-panel" onSubmit={handleSubmit}><div className="form-section-heading"><div><p className="eyebrow">Incident details</p><h2 className="section-title">Tell us what is happening</h2></div><HeartPulse size={22} /></div><div className="form-grid"><label>Reporter name<input name="name" required placeholder="Your name" /></label><label>Location<div className="input-with-icon"><MapPin size={16} /><input name="location" required placeholder="Nearest landmark or address" /></div></label><label>Type of disaster<select name="disaster" defaultValue="Flood"><option>Flood</option><option>Cyclone</option><option>Fire</option><option>Earthquake</option><option>Landslide</option><option>Other</option></select></label><label>People injured<input name="injured" type="number" min="0" placeholder="0" /></label><label>Casualties<input name="casualties" type="number" min="0" placeholder="0" /></label><label>Immediate help needed<select name="help" defaultValue="Medical assistance"><option>Medical assistance</option><option>Rescue team</option><option>Shelter</option><option>Food and water</option><option>None right now</option></select></label></div><div className="form-footer"><label className="safe-check"><input name="safe" type="checkbox" /> I am safe</label><button className="form-submit report-submit" type="submit"><Send size={16} /> Submit report</button></div></form></>;
+}
