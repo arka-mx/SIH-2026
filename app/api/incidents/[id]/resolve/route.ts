@@ -1,73 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
-import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
-import { requireAuthority } from "@/lib/auth";
-import Report from "@/lib/models/Report";
-import Resource from "@/lib/models/Resource";
-import Allocation from "@/lib/models/Allocation";
+import { ReportModel } from "@/lib/models/Report";
+import { AllocationModel } from "@/lib/models/Allocation";
+import { ResourceModel } from "@/lib/models/Resource";
+import { isAuthorizedAuthority } from "@/lib/auth";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const unauthorized = requireAuthority(req);
-  if (unauthorized) return unauthorized;
-
-  await connectToDatabase();
-  const { id } = await params;
-
-  if (!mongoose.isValidObjectId(id)) {
-    return NextResponse.json({ error: "Report not found" }, { status: 404 });
-  }
-
-  const existing = await Report.findById(id);
-  if (!existing) {
-    return NextResponse.json({ error: "Report not found" }, { status: 404 });
-  }
-  if (existing.status === "resolved") {
-    return NextResponse.json({ error: "Incident already resolved" }, { status: 400 });
-  }
-  if (existing.status !== "in_progress") {
-    return NextResponse.json({ error: "Report is not in_progress" }, { status: 400 });
-  }
-
-  const report = await Report.findOneAndUpdate(
-    { _id: id, status: "in_progress" },
-    { $set: { status: "resolved" } },
-    { new: true }
-  );
-  if (!report) {
-    return NextResponse.json({ error: "Report is not in_progress" }, { status: 400 });
-  }
-
-  const activeAllocation = await Allocation.findOne({
-    report_id: id,
-    status: { $in: ["confirmed", "en_route", "at_scene"] },
-  }).sort({ created_at: -1 });
-
-  let allocation = null;
-  let resource = null;
-
-  if (activeAllocation) {
-    allocation = await Allocation.findOneAndUpdate(
-      { _id: activeAllocation._id },
-      { $set: { status: "resolved" } },
-      { new: true }
-    );
-
-    resource = await Resource.findOneAndUpdate(
-      { _id: activeAllocation.resource_id, capacity_used: { $gt: 0 } },
-      { $inc: { capacity_used: -1 }, $set: { status: "available" } },
-      { new: true }
-    );
-    if (!resource) {
-      resource = await Resource.findById(activeAllocation.resource_id);
+  try {
+    if (!isAuthorizedAuthority(req)) {
+      return NextResponse.json({ error: "Unauthorized authority token" }, { status: 401 });
     }
-  }
 
-  return NextResponse.json({
-    report: report.toJSON(),
-    allocation: allocation ? allocation.toJSON() : {},
-    resource: resource ? resource.toJSON() : {},
-  });
+    await connectToDatabase();
+    const { id } = await params;
+
+    const report = await ReportModel.findByIdAndUpdate(
+      id,
+      { status: "resolved" },
+      { new: true }
+    );
+
+    if (!report) {
+      return NextResponse.json({ error: "Incident not found" }, { status: 404 });
+    }
+
+    // Find allocation and update resource status
+    const allocation = await AllocationModel.findOneAndUpdate(
+      { report_id: id },
+      { status: "resolved" },
+      { new: true }
+    );
+
+    let resource = null;
+    if (allocation) {
+      resource = await ResourceModel.findByIdAndUpdate(
+        allocation.resource_id,
+        { status: "available" },
+        { new: true }
+      );
+    }
+
+    return NextResponse.json({
+      report: {
+        id: report._id.toString(),
+        session_id: report.session_id,
+        type: report.type,
+        status: report.status,
+      },
+      allocation: allocation ? { id: allocation._id.toString(), status: allocation.status } : undefined,
+      resource: resource ? { id: resource._id.toString(), status: resource.status } : undefined,
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Failed to resolve incident" }, { status: 500 });
+  }
 }

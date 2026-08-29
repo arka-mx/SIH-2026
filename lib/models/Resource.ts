@@ -1,43 +1,36 @@
-import mongoose, { Schema, type InferSchemaType } from "mongoose";
+import mongoose, { Schema, Document, Model } from "mongoose";
 
-export const RESOURCE_TYPES = [
-  "shelter",
-  "rescue_team",
-  "medical_van",
-  "boat",
-  "food_stock",
-  "ambulance",
-  "fire_engine",
-] as const;
-export const RESOURCE_STATUSES = ["available", "en_route", "at_scene"] as const;
+export interface IResource extends Document {
+  name: string;
+  type: "shelter" | "rescue_team" | "medical_van" | "boat" | "food_stock" | "ambulance" | "fire_engine";
+  capacity_total: number;
+  capacity_used: number;
+  status: "available" | "en_route" | "at_scene";
+  disaster_types: string[];
+  location: {
+    type: string;
+    coordinates: [number, number]; // [lng, lat]
+  };
+  created_at: Date;
+}
 
-const ResourceSchema = new Schema(
+const ResourceSchema = new Schema<IResource>(
   {
     name: { type: String, required: true },
-    type: { type: String, enum: RESOURCE_TYPES, required: true },
+    type: { type: String, required: true },
     capacity_total: { type: Number, required: true },
     capacity_used: { type: Number, default: 0 },
-    location: {
-      type: { type: String, enum: ["Point"], required: true },
-      coordinates: { type: [Number], required: true }, // [lng, lat]
-    },
-    status: { type: String, enum: RESOURCE_STATUSES, default: "available" },
+    status: { type: String, enum: ["available", "en_route", "at_scene"], default: "available" },
     disaster_types: { type: [String], default: [] },
-    created_at: { type: Date, default: Date.now },
-  },
-  {
-    toJSON: {
-      transform(_doc, ret: Record<string, unknown>) {
-        ret.id = (ret._id as mongoose.Types.ObjectId).toString();
-        delete ret._id;
-        delete ret.__v;
-      },
+    location: {
+      type: { type: String, enum: ["Point"], default: "Point" },
+      coordinates: { type: [Number], required: true },
     },
-  }
+  },
+  { timestamps: { createdAt: "created_at", updatedAt: false } }
 );
 
 ResourceSchema.index({ location: "2dsphere" });
 
-export type ResourceDoc = InferSchemaType<typeof ResourceSchema>;
-
-export default mongoose.models.Resource || mongoose.model("Resource", ResourceSchema);
+export const ResourceModel: Model<IResource> =
+  mongoose.models.Resource || mongoose.model<IResource>("Resource", ResourceSchema);

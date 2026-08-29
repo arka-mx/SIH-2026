@@ -8,17 +8,20 @@ import {
   FileWarning, 
   Package, 
   UsersRound, 
-  Truck 
+  Truck,
+  ShieldAlert
 } from "lucide-react";
 
 const items = [
-  { href: "/admin/profile", label: "Profile", icon: CircleUserRound },
+  { href: "/admin", label: "Dashboard", icon: CircleUserRound },
+  { href: "/admin/permissions", label: "Auto-Alert Rules", icon: ShieldAlert },
   { href: "/admin/verified", label: "Verified", icon: ClipboardCheck },
   { href: "/admin/unverified", label: "Unverified", icon: FileWarning },
   { href: "/admin/volunteers", label: "Volunteers", icon: UsersRound },
   { href: "/admin/resources", label: "Resources", icon: Package },
   { href: "/rescuer/demo-team-alpha", label: "Rescuer Field", icon: Truck },
 ];
+
 
 export function Navigation() {
   const pathname = usePathname();

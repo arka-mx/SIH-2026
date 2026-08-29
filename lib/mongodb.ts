@@ -2,27 +2,37 @@ import mongoose from "mongoose";
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/sih-2026";
 
-interface MongooseCache {
-  conn: typeof mongoose | null;
-  promise: Promise<typeof mongoose> | null;
+if (!MONGODB_URI) {
+  throw new Error("Please define the MONGODB_URI environment variable inside .env");
 }
 
-declare global {
-  var _mongooseCache: MongooseCache | undefined;
+let cached = (global as any).mongoose;
+
+if (!cached) {
+  cached = (global as any).mongoose = { conn: null, promise: null };
 }
 
-const cache: MongooseCache = global._mongooseCache ?? { conn: null, promise: null };
-global._mongooseCache = cache;
-
-export async function connectToDatabase(): Promise<typeof mongoose> {
-  if (cache.conn) {
-    return cache.conn;
+export async function connectToDatabase() {
+  if (cached.conn) {
+    return cached.conn;
   }
 
-  if (!cache.promise) {
-    cache.promise = mongoose.connect(MONGODB_URI);
+  if (!cached.promise) {
+    const opts = {
+      bufferCommands: false,
+    };
+
+    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongooseInstance) => {
+      return mongooseInstance;
+    });
   }
 
-  cache.conn = await cache.promise;
-  return cache.conn;
+  try {
+    cached.conn = await cached.promise;
+  } catch (e) {
+    cached.promise = null;
+    throw e;
+  }
+
+  return cached.conn;
 }

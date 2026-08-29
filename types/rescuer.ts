@@ -27,3 +27,59 @@ export interface RescuerUnitProfile {
   assignmentSource?: "admin_dispatch" | "nearest_fallback" | null;
   supplies: RescuerSupply;
 }
+
+export interface ResponseTeamRequest {
+  id: string;
+  unitId: string;
+  unitName: string;
+  callsign: string;
+  requestType: "supplies" | "equipment" | "reinforcement" | "medical_evac" | "transport";
+  title: string;
+  details: string;
+  urgency: "critical" | "high" | "moderate";
+  status: "pending" | "approved" | "dispatched" | "fulfilled";
+  requestedAt: string;
+  lat: number;
+  lng: number;
+  locationName: string;
+}
+
+export interface CitizenResponse {
+  id: string;
+  reportId: string;
+  citizenName: string;
+  phone: string;
+  status: "immediate_help" | "trapped" | "medical_need" | "safe" | "supply_needed";
+  message: string;
+  peopleCount: number;
+  timestamp: string;
+  lat: number;
+  lng: number;
+  locationName: string;
+  isRadicalRegion: boolean;
+  autoAlertTriggered: boolean;
+}
+
+export interface RadicalRegionRule {
+  id: string;
+  regionName: string;
+  riskLevel: "extreme_radical" | "high_risk" | "moderate_risk";
+  centerLat: number;
+  centerLng: number;
+  radiusKm: number;
+  autoBroadcastSosToRescuers: boolean;
+  autoDispatchThreshold: number;
+  rescuerAuthorityLevel: "level_1_autonomous" | "level_2_field_resource" | "level_3_command_approval";
+  enabled: boolean;
+  activeAlertsCount: number;
+}
+
+export interface PredeterminedPermissionSettings {
+  globalAutoDispatchEnabled: boolean;
+  radicalRegionsAutoAlertEnabled: boolean;
+  minReportClusterForAutoDispatch: number;
+  maxAutoDispatchRadiusKm: number;
+  requireAdminPostConfirmation: boolean;
+  regions: RadicalRegionRule[];
+}
+

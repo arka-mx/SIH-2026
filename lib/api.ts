@@ -1,4 +1,11 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+import { 
+  ResponseTeamRequest, 
+  CitizenResponse, 
+  PredeterminedPermissionSettings, 
+  RadicalRegionRule 
+} from "@/types/rescuer";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : "";
 const AUTH_TOKEN = "demo-authority-token";
 
 export interface ReportItem {
@@ -51,7 +58,271 @@ const FALLBACK_INCIDENTS: ReportItem[] = [
   { id: "INC-102", session_id: "demo-s2", type: "cyclone", description: "Trees fallen and power lines disrupted", status: "unverified", created_at: new Date().toISOString(), lat: 19.085, lng: 72.885, location_wkt: "POINT(72.885 19.085)" },
 ];
 
-// ── Citizen Endpoints ──
+// In-memory state for Response Team Requests
+let inMemoryTeamRequests: ResponseTeamRequest[] = [
+  {
+    id: "REQ-901",
+    unitId: "res-1",
+    unitName: "Brahmapur NDRF Boat Unit",
+    callsign: "Alpha-1",
+    requestType: "supplies",
+    title: "Urgent: 50L Clean Water & Medical Kits Needed",
+    details: "Evacuated 18 citizens near Market Bridge; drinking water and pediatric ORS kits exhausted.",
+    urgency: "critical",
+    status: "pending",
+    requestedAt: new Date(Date.now() - 15 * 60000).toISOString(),
+    lat: 19.315,
+    lng: 84.794,
+    locationName: "Brahmapur Market Sector 4",
+  },
+  {
+    id: "REQ-902",
+    unitId: "res-4",
+    unitName: "Coastal Rescue Fire Engine",
+    callsign: "Fire-Command-2",
+    requestType: "equipment",
+    title: "High-Capacity Hydraulic Cutter & Searchlights",
+    details: "Building structural collapse at Station Road requires hydraulic cutters for trapped victims.",
+    urgency: "high",
+    status: "pending",
+    requestedAt: new Date(Date.now() - 40 * 60000).toISOString(),
+    lat: 19.325,
+    lng: 84.790,
+    locationName: "Station Road Junction",
+  },
+  {
+    id: "REQ-903",
+    unitId: "res-2",
+    unitName: "City Hospital Rapid Ambulance",
+    callsign: "Medic-Alpha",
+    requestType: "reinforcement",
+    title: "Request Additional Triage Rescuers (2 Medics)",
+    details: "Over 12 injured citizens requiring immediate stabilization before transport.",
+    urgency: "critical",
+    status: "approved",
+    requestedAt: new Date(Date.now() - 60 * 60000).toISOString(),
+    lat: 19.320,
+    lng: 84.800,
+    locationName: "East Relief Camp Hub",
+  },
+];
+
+// In-memory state for Citizen Responses
+let inMemoryCitizenResponses: CitizenResponse[] = [
+  {
+    id: "CIT-801",
+    reportId: "INC-101",
+    citizenName: "Ramesh Senapati",
+    phone: "+91 98765 43210",
+    status: "trapped",
+    message: "4 members stranded on roof of 2-storey house. Water level reached 1st floor ceiling. Need boat!",
+    peopleCount: 4,
+    timestamp: new Date(Date.now() - 8 * 60000).toISOString(),
+    lat: 19.078,
+    lng: 72.879,
+    locationName: "Low-Lying River Delta (Radical Zone Alpha)",
+    isRadicalRegion: true,
+    autoAlertTriggered: true,
+  },
+  {
+    id: "CIT-802",
+    reportId: "INC-102",
+    citizenName: "Priyanka Naik",
+    phone: "+91 91234 56789",
+    status: "medical_need",
+    message: "Elderly person suffering severe dyspnea and fever. Oxygen cylinder running low.",
+    peopleCount: 2,
+    timestamp: new Date(Date.now() - 22 * 60000).toISOString(),
+    lat: 19.088,
+    lng: 72.887,
+    locationName: "Coastal Storm Surge Slope (Radical Zone Gamma)",
+    isRadicalRegion: true,
+    autoAlertTriggered: true,
+  },
+  {
+    id: "CIT-803",
+    reportId: "INC-101",
+    citizenName: "Anil Mohanty",
+    phone: "+91 99887 76655",
+    status: "safe",
+    message: "Moved safely to Higher Ground School Camp. Food rations received.",
+    peopleCount: 5,
+    timestamp: new Date(Date.now() - 45 * 60000).toISOString(),
+    lat: 19.072,
+    lng: 72.871,
+    locationName: "West Ridge Relief Shelter",
+    isRadicalRegion: false,
+    autoAlertTriggered: false,
+  },
+];
+
+// In-memory Predetermined Permission Settings for Radical Regions
+let inMemoryPermissionSettings: PredeterminedPermissionSettings = {
+  globalAutoDispatchEnabled: true,
+  radicalRegionsAutoAlertEnabled: true,
+  minReportClusterForAutoDispatch: 2,
+  maxAutoDispatchRadiusKm: 5,
+  requireAdminPostConfirmation: true,
+  regions: [
+    {
+      id: "RAD-ZONE-1",
+      regionName: "Low-Lying River Delta (Zone Alpha)",
+      riskLevel: "extreme_radical",
+      centerLat: 19.078,
+      centerLng: 72.879,
+      radiusKm: 3.5,
+      autoBroadcastSosToRescuers: true,
+      autoDispatchThreshold: 1,
+      rescuerAuthorityLevel: "level_1_autonomous",
+      enabled: true,
+      activeAlertsCount: 3,
+    },
+    {
+      id: "RAD-ZONE-2",
+      regionName: "Coastal Storm Surge Slope (Zone Gamma)",
+      riskLevel: "high_risk",
+      centerLat: 19.088,
+      centerLng: 72.887,
+      radiusKm: 4.0,
+      autoBroadcastSosToRescuers: true,
+      autoDispatchThreshold: 2,
+      rescuerAuthorityLevel: "level_2_field_resource",
+      enabled: true,
+      activeAlertsCount: 2,
+    },
+    {
+      id: "RAD-ZONE-3",
+      regionName: "Landslide Flash Flood Ravine (Zone Delta)",
+      riskLevel: "extreme_radical",
+      centerLat: 19.315,
+      centerLng: 84.794,
+      radiusKm: 5.0,
+      autoBroadcastSosToRescuers: true,
+      autoDispatchThreshold: 1,
+      rescuerAuthorityLevel: "level_1_autonomous",
+      enabled: true,
+      activeAlertsCount: 1,
+    },
+  ],
+};
+
+// ── Response Team Requests Endpoints ──
+
+export async function apiGetResponseTeamRequests(): Promise<ResponseTeamRequest[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/rescuer-requests`, { cache: "no-store" });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // fallback
+  }
+  return inMemoryTeamRequests;
+}
+
+export async function apiUpdateTeamRequestStatus(
+  requestId: string,
+  status: "approved" | "dispatched" | "fulfilled"
+): Promise<ResponseTeamRequest> {
+  inMemoryTeamRequests = inMemoryTeamRequests.map((req) =>
+    req.id === requestId ? { ...req, status } : req
+  );
+  const updated = inMemoryTeamRequests.find((r) => r.id === requestId);
+  if (!updated) throw new Error("Request not found");
+  return updated;
+}
+
+export async function apiCreateTeamRequest(newReq: Partial<ResponseTeamRequest>): Promise<ResponseTeamRequest> {
+  const reqItem: ResponseTeamRequest = {
+    id: "REQ-" + Math.floor(100 + Math.random() * 900),
+    unitId: newReq.unitId || "res-1",
+    unitName: newReq.unitName || "Field Rescue Unit",
+    callsign: newReq.callsign || "Unit-1",
+    requestType: newReq.requestType || "supplies",
+    title: newReq.title || "Emergency Field Assistance",
+    details: newReq.details || "",
+    urgency: newReq.urgency || "high",
+    status: "pending",
+    requestedAt: new Date().toISOString(),
+    lat: newReq.lat || 19.076,
+    lng: newReq.lng || 72.8777,
+    locationName: newReq.locationName || "Field Sector",
+  };
+  inMemoryTeamRequests.unshift(reqItem);
+  return reqItem;
+}
+
+// ── Citizen Responses Endpoints ──
+
+export async function apiGetCitizenResponses(): Promise<CitizenResponse[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/citizen-responses`, { cache: "no-store" });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // fallback
+  }
+  return inMemoryCitizenResponses;
+}
+
+export async function apiSubmitCitizenResponse(resp: Partial<CitizenResponse>): Promise<CitizenResponse> {
+  const item: CitizenResponse = {
+    id: "CIT-" + Math.floor(100 + Math.random() * 900),
+    reportId: resp.reportId || "INC-101",
+    citizenName: resp.citizenName || "Citizen User",
+    phone: resp.phone || "+91 90000 00000",
+    status: resp.status || "immediate_help",
+    message: resp.message || "Emergency response submitted",
+    peopleCount: resp.peopleCount || 1,
+    timestamp: new Date().toISOString(),
+    lat: resp.lat || 19.076,
+    lng: resp.lng || 72.8777,
+    locationName: resp.locationName || "Target Location",
+    isRadicalRegion: resp.isRadicalRegion || true,
+    autoAlertTriggered: resp.autoAlertTriggered || true,
+  };
+  inMemoryCitizenResponses.unshift(item);
+  return item;
+}
+
+// ── Automated Alert Permissions & Radical Regions Endpoints ──
+
+export async function apiGetAutomatedPermissions(): Promise<PredeterminedPermissionSettings> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/permissions`, { cache: "no-store" });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // fallback
+  }
+  return inMemoryPermissionSettings;
+}
+
+export async function apiUpdateAutomatedPermissions(
+  updatedSettings: Partial<PredeterminedPermissionSettings>
+): Promise<PredeterminedPermissionSettings> {
+  inMemoryPermissionSettings = {
+    ...inMemoryPermissionSettings,
+    ...updatedSettings,
+  };
+  return inMemoryPermissionSettings;
+}
+
+export async function apiToggleRadicalRegionRule(
+  regionId: string,
+  enabled: boolean
+): Promise<RadicalRegionRule> {
+  inMemoryPermissionSettings.regions = inMemoryPermissionSettings.regions.map((r) =>
+    r.id === regionId ? { ...r, enabled } : r
+  );
+  const updated = inMemoryPermissionSettings.regions.find((r) => r.id === regionId);
+  if (!updated) throw new Error("Region not found");
+  return updated;
+}
+
+// ── Original Citizen Endpoints ──
 
 export async function apiSubmitReport(formData: FormData): Promise<{ report: ReportItem; verifiedReports?: ReportItem[] }> {
   try {
@@ -206,3 +477,4 @@ export async function apiResolveIncident(incidentId: string): Promise<{
     throw new Error(msg);
   }
 }
+

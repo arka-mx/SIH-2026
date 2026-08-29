@@ -1,58 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
-import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
-import { requireAuthority } from "@/lib/auth";
-import Resource, { RESOURCE_STATUSES } from "@/lib/models/Resource";
-
-const VALID_STATUSES = ["en_route", "at_scene", "available"] as const;
-
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  available: ["en_route"],
-  en_route: ["at_scene"],
-  at_scene: ["available"],
-};
+import { ResourceModel } from "@/lib/models/Resource";
+import { isAuthorizedAuthority } from "@/lib/auth";
 
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const unauthorized = requireAuthority(req);
-  if (unauthorized) return unauthorized;
+  try {
+    if (!isAuthorizedAuthority(req)) {
+      return NextResponse.json({ error: "Unauthorized authority token" }, { status: 401 });
+    }
 
-  await connectToDatabase();
-  const { id } = await params;
-  const { status } = await req.json();
+    await connectToDatabase();
+    const { id } = await params;
+    const body = await req.json();
+    const { status } = body;
 
-  if (!status) {
-    return NextResponse.json({ error: "Missing required field: status" }, { status: 400 });
-  }
+    if (!status || !["available", "en_route", "at_scene"].includes(status)) {
+      return NextResponse.json({ error: "Invalid status value" }, { status: 400 });
+    }
 
-  if (!VALID_STATUSES.includes(status)) {
-    return NextResponse.json(
-      { error: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` },
-      { status: 400 }
+    const updatedResource = await ResourceModel.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true }
     );
+
+    if (!updatedResource) {
+      return NextResponse.json({ error: "Resource not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      id: updatedResource._id.toString(),
+      name: updatedResource.name,
+      type: updatedResource.type,
+      capacity_total: updatedResource.capacity_total,
+      capacity_used: updatedResource.capacity_used,
+      status: updatedResource.status,
+      disaster_types: updatedResource.disaster_types,
+      created_at: updatedResource.created_at,
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Failed to update resource status" }, { status: 500 });
   }
-
-  if (!mongoose.isValidObjectId(id)) {
-    return NextResponse.json({ error: "Resource not found" }, { status: 404 });
-  }
-
-  const resource = await Resource.findById(id);
-  if (!resource) {
-    return NextResponse.json({ error: "Resource not found" }, { status: 404 });
-  }
-
-  const allowedNext = VALID_TRANSITIONS[resource.status] || [];
-  if (!allowedNext.includes(status)) {
-    return NextResponse.json(
-      { error: `Invalid status transition: ${resource.status} → ${status}` },
-      { status: 400 }
-    );
-  }
-
-  resource.status = status as (typeof RESOURCE_STATUSES)[number];
-  await resource.save();
-
-  return NextResponse.json(resource.toJSON());
 }

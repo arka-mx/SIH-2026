@@ -1,27 +1,53 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { EmergencyStats } from "@/components/admin/EmergencyStats";
 import { DashboardCard } from "@/components/admin/DashboardCard";
 import { IncidentMap } from "@/components/incidents/IncidentMap";
 import { IncidentCard } from "@/components/incidents/IncidentCard";
+import { ResponseTeamRequests } from "@/components/admin/ResponseTeamRequests";
+import { CitizenResponsesFeed } from "@/components/admin/CitizenResponsesFeed";
 import { Badge } from "@/components/ui/Badge";
-import { apiGetAllIncidents, ReportItem } from "@/lib/api";
+import { 
+  apiGetAllIncidents, 
+  apiGetAllResources, 
+  apiGetAutomatedPermissions, 
+  apiGetResponseTeamRequests, 
+  apiGetCitizenResponses, 
+  ReportItem, 
+  ResourceItem 
+} from "@/lib/api";
+import { PredeterminedPermissionSettings, ResponseTeamRequest, CitizenResponse } from "@/types/rescuer";
 import { useRealtimeIncidents } from "@/lib/socket";
-import { Radio, RefreshCw, Sparkles, ShieldAlert } from "lucide-react";
+import { Radio, RefreshCw, Sparkles, ShieldAlert, Zap, ArrowRight, Truck, Users } from "lucide-react";
 
 export default function AdminPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [selectedIncident, setSelectedIncident] = useState<ReportItem | null>(null);
+  const [resources, setResources] = useState<ResourceItem[]>([]);
+  const [permissions, setPermissions] = useState<PredeterminedPermissionSettings | null>(null);
+  const [teamRequests, setTeamRequests] = useState<ResponseTeamRequest[]>([]);
+  const [citizenResponses, setCitizenResponses] = useState<CitizenResponse[]>([]);
   const { incidents, setIncidents, isConnected } = useRealtimeIncidents([]);
 
   async function fetchFreshData() {
     try {
-      const data = await apiGetAllIncidents();
-      setIncidents(data);
+      const [incData, resData, permData, reqData, citData] = await Promise.all([
+        apiGetAllIncidents(),
+        apiGetAllResources(),
+        apiGetAutomatedPermissions(),
+        apiGetResponseTeamRequests(),
+        apiGetCitizenResponses(),
+      ]);
+      setIncidents(incData);
+      setResources(resData);
+      setPermissions(permData);
+      setTeamRequests(reqData);
+      setCitizenResponses(citData);
     } catch (err) {
-      console.warn("Could not fetch fresh incidents from API:", err);
+      console.warn("Could not fetch fresh data from API:", err);
     } finally {
       setInitialLoading(false);
     }
@@ -41,7 +67,36 @@ export default function AdminPage() {
 
   return (
     <AdminShell>
-      <div className="flex items-center justify-between mb-2">
+      {/* Banner for Predetermined Permissions & Radical Regions */}
+      <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white p-4 rounded-2xl mb-4 flex items-center justify-between flex-wrap gap-3 shadow-sm border border-purple-800">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-purple-500/20 text-purple-300 rounded-xl border border-purple-500/30">
+            <Zap size={22} className="text-purple-400 animate-pulse" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase font-bold tracking-wider bg-purple-500/30 text-purple-200 px-2 py-0.5 rounded border border-purple-500/30">
+                Predetermined Admin Rules
+              </span>
+              <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
+                <i className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" /> Auto-Alert System Active
+              </span>
+            </div>
+            <h2 className="text-sm font-bold text-white mt-0.5">
+              Direct Citizen-to-Rescuer Auto-Alerting for Radical Disaster Regions
+            </h2>
+          </div>
+        </div>
+
+        <Link
+          href="/admin/permissions"
+          className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 transition-all"
+        >
+          Configure Permissions & Radical Zones <ArrowRight size={14} />
+        </Link>
+      </div>
+
+      <div className="flex items-center justify-between mb-4">
         <EmergencyStats incidents={incidents} />
       </div>
 
@@ -49,6 +104,8 @@ export default function AdminPage() {
         <div className="space-y-4">
           <IncidentMap
             incidents={incidents}
+            resources={resources}
+            radicalRegions={permissions?.regions || []}
             selectedIncidentId={selectedIncident?.id}
             onSelectIncident={handleSelectIncident}
             isConnected={isConnected}
@@ -140,7 +197,7 @@ export default function AdminPage() {
             )}
           </DashboardCard>
 
-          {/* Unverified Reports (Gathering Cluster) */}
+          {/* Unverified Reports */}
           <DashboardCard
             title="Unverified incoming reports"
             count={unverified.length}
@@ -170,6 +227,13 @@ export default function AdminPage() {
           </DashboardCard>
         </div>
       </div>
+
+      {/* Response Team Requests & Citizen Responses Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <ResponseTeamRequests requests={teamRequests} onRefresh={fetchFreshData} />
+        <CitizenResponsesFeed responses={citizenResponses} />
+      </div>
     </AdminShell>
   );
 }
+

@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { Navigation, Radio } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { ReportItem, ResourceItem } from "@/lib/api";
+import { RadicalRegionRule } from "@/types/rescuer";
 
 const DynamicLiveMap = dynamic(
   () => import("./LiveMap").then((mod) => mod.LiveMap),
@@ -21,6 +22,7 @@ const DynamicLiveMap = dynamic(
 interface IncidentMapProps {
   incidents?: ReportItem[];
   resources?: ResourceItem[];
+  radicalRegions?: RadicalRegionRule[];
   selectedIncidentId?: string | null;
   onSelectIncident?: (incident: ReportItem) => void;
   isConnected?: boolean;
@@ -29,6 +31,7 @@ interface IncidentMapProps {
 export function IncidentMap({
   incidents = [],
   resources = [],
+  radicalRegions = [],
   selectedIncidentId,
   onSelectIncident,
   isConnected = true,
@@ -51,12 +54,13 @@ export function IncidentMap({
       <DynamicLiveMap
         incidents={incidents}
         resources={resources}
+        radicalRegions={radicalRegions}
         selectedIncidentId={selectedIncidentId}
         onSelectIncident={onSelectIncident}
       />
 
       <div className="mt-3 flex items-center justify-between text-xs text-stone-500 pt-2 border-t border-stone-100 flex-wrap gap-2">
-        <div className="flex items-center gap-4 text-[11px]">
+        <div className="flex items-center gap-3 text-[11px] flex-wrap">
           <span className="flex items-center gap-1.5 font-medium">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Unverified Report
           </span>
@@ -67,7 +71,10 @@ export function IncidentMap({
             <span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> Active Dispatch
           </span>
           <span className="flex items-center gap-1.5 font-medium">
-            <span className="w-2.5 h-2.5 rounded-md bg-indigo-600" /> Available Resource
+            <span className="w-2.5 h-2.5 rounded-md bg-indigo-600" /> Rescue Team / Resource Giver
+          </span>
+          <span className="flex items-center gap-1.5 font-medium text-rose-700">
+            <span className="w-2.5 h-2.5 rounded-full border border-rose-500 bg-rose-100" /> High-Risk Danger Zone
           </span>
         </div>
         <div className="flex items-center gap-1 font-mono text-[11px] text-stone-400">
@@ -77,3 +84,4 @@ export function IncidentMap({
     </Card>
   );
 }
+

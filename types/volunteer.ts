@@ -1,10 +1,10 @@
-export type VolunteerStatus = "New request" | "Contacted" | "Assigned";
+export type VolunteerStatus = "Available" | "Contacted" | "Assigned";
 
 export interface Volunteer {
   id: string;
   name: string;
   location: string;
-  service: "Medical Assistance" | "Food Distribution" | "Rescue Support" | "Transportation" | "Shelter Support";
+  service: string;
   availability: string;
   contact: string;
   status: VolunteerStatus;

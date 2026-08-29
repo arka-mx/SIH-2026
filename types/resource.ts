@@ -2,14 +2,14 @@ export type ResourceStatus = "Available" | "En route" | "At scene" | "Unavailabl
 
 export interface Resource {
   id: string;
-  type: string;
   name: string;
-  location: string;
-  latitude: number;
-  longitude: number;
+  type: string;
   total: number;
   currentlyUsed: number;
   unit: string;
   status: ResourceStatus;
+  location: string;
+  latitude: number;
+  longitude: number;
   disasterTypes: string[];
 }

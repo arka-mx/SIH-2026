@@ -1,34 +1,34 @@
-import mongoose, { Schema, type InferSchemaType } from "mongoose";
+import mongoose, { Schema, Document, Model } from "mongoose";
 
-export const REPORT_TYPES = ["flood", "cyclone", "landslide", "medical", "fire", "other"] as const;
-export const REPORT_STATUSES = ["unverified", "verified", "in_progress", "resolved"] as const;
+export interface IReport extends Document {
+  session_id: string;
+  type: "flood" | "cyclone" | "landslide" | "medical" | "fire" | "other";
+  description?: string;
+  photo_url?: string;
+  status: "unverified" | "verified" | "in_progress" | "resolved";
+  location: {
+    type: string;
+    coordinates: [number, number]; // [lng, lat]
+  };
+  created_at: Date;
+}
 
-const ReportSchema = new Schema(
+const ReportSchema = new Schema<IReport>(
   {
     session_id: { type: String, required: true },
-    type: { type: String, enum: REPORT_TYPES, required: true },
-    description: { type: String, default: null },
-    photo_url: { type: String, default: null },
+    type: { type: String, required: true, enum: ["flood", "cyclone", "landslide", "medical", "fire", "other"] },
+    description: { type: String },
+    photo_url: { type: String },
+    status: { type: String, enum: ["unverified", "verified", "in_progress", "resolved"], default: "unverified" },
     location: {
-      type: { type: String, enum: ["Point"], required: true },
-      coordinates: { type: [Number], required: true }, // [lng, lat]
+      type: { type: String, enum: ["Point"], default: "Point" },
+      coordinates: { type: [Number], required: true },
     },
-    status: { type: String, enum: REPORT_STATUSES, default: "unverified" },
-    created_at: { type: Date, default: Date.now },
   },
-  {
-    toJSON: {
-      transform(_doc, ret: Record<string, unknown>) {
-        ret.id = (ret._id as mongoose.Types.ObjectId).toString();
-        delete ret._id;
-        delete ret.__v;
-      },
-    },
-  }
+  { timestamps: { createdAt: "created_at", updatedAt: false } }
 );
 
 ReportSchema.index({ location: "2dsphere" });
 
-export type ReportDoc = InferSchemaType<typeof ReportSchema>;
-
-export default mongoose.models.Report || mongoose.model("Report", ReportSchema);
+export const ReportModel: Model<IReport> =
+  mongoose.models.Report || mongoose.model<IReport>("Report", ReportSchema);

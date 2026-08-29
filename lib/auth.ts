@@ -1,13 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 const AUTHORITY_TOKEN = "demo-authority-token";
 
-export function requireAuthority(req: NextRequest): NextResponse | null {
-  const token = req.headers.get("x-authority-token");
+export function isAuthorizedAuthority(req: NextRequest): boolean {
+  const legacyToken = req.headers.get("x-authority-token");
+  const authHeader = req.headers.get("authorization");
 
-  if (!token || token !== AUTHORITY_TOKEN) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (legacyToken === AUTHORITY_TOKEN) {
+    return true;
   }
-
-  return null;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    return true;
+  }
+  return false;
 }

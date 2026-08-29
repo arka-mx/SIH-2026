@@ -30,14 +30,15 @@ export function SupplyTracker({
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
 
   function handleChange(key: keyof RescuerSupply, delta: number, maxCapKey?: keyof RescuerSupply) {
-    setSupplies((prev) => {
-      const currentVal = prev[key] as number;
-      const maxCap = maxCapKey ? (prev[maxCapKey] as number) : Infinity;
-      const newVal = Math.max(0, Math.min(maxCap, currentVal + delta));
-      const updated = { ...prev, [key]: newVal };
-      if (onUpdateSupplies) onUpdateSupplies(updated);
-      return updated;
-    });
+    const currentVal = supplies[key] as number;
+    const maxCap = maxCapKey ? (supplies[maxCapKey] as number) : Infinity;
+    const newVal = Math.max(0, Math.min(maxCap, currentVal + delta));
+    const updated = { ...supplies, [key]: newVal };
+
+    setSupplies(updated);
+    if (onUpdateSupplies) {
+      onUpdateSupplies(updated);
+    }
 
     setUpdateMsg(`Updated ${key.replace(/([A-Z])/g, " $1")} state`);
     setTimeout(() => setUpdateMsg(null), 2500);

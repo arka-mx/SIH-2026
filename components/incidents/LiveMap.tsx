@@ -4,10 +4,12 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { ReportItem, ResourceItem } from "@/lib/api";
+import { RadicalRegionRule } from "@/types/rescuer";
 
 interface LiveMapProps {
   incidents: ReportItem[];
   resources?: ResourceItem[];
+  radicalRegions?: RadicalRegionRule[];
   selectedIncidentId?: string | null;
   onSelectIncident?: (incident: ReportItem) => void;
 }
@@ -15,6 +17,7 @@ interface LiveMapProps {
 export function LiveMap({
   incidents = [],
   resources = [],
+  radicalRegions = [],
   selectedIncidentId,
   onSelectIncident,
 }: LiveMapProps) {
@@ -35,45 +38,45 @@ export function LiveMap({
       scrollWheelZoom: true,
     });
 
-    const mapTilerKey = process.env.NEXT_PUBLIC_MAPTILER_KEY || "LJiRRVQ1VrBOvHYlVxt0";
-    const mapTilerMapId = process.env.NEXT_PUBLIC_MAPTILER_MAP_ID || "01a04c9a-1c5a-7cb4-bd2f-68a04c973a9f";
+    const mapTilerKey = process.env.NEXT_PUBLIC_MAPTILER_KEY;
+    const mapTilerMapId = process.env.NEXT_PUBLIC_MAPTILER_MAP_ID;
 
-    // Primary: MapTiler Tile Layer
-    // Standard style tile endpoint or custom style map ID endpoint
-    const tileUrl = mapTilerMapId && mapTilerMapId !== "streets-v2"
-      ? `https://api.maptiler.com/maps/${mapTilerMapId}/256/{z}/{x}/{y}.png?key=${mapTilerKey}`
-      : `https://api.maptiler.com/maps/streets-v2/256/{z}/{x}/{y}.png?key=${mapTilerKey}`;
-
-    const tileLayer = L.tileLayer(tileUrl, {
-      attribution:
-        '\u003ca href="https://www.maptiler.com/copyright/" target="_blank"\u003e\u0026copy; MapTiler\u003c/a\u003e \u003ca href="https://www.openstreetmap.org/copyright" target="_blank"\u003e\u0026copy; OpenStreetMap\u003c/a\u003e',
-      maxZoom: 20,
-      tileSize: 256,
-      crossOrigin: true,
-    });
-
-    // Fallback if MapTiler Cloud encounters any rate limit or map ID mismatch
-    tileLayer.on("tileerror", () => {
-      // Graceful fallback to OSM tiles if custom tiles fail
-      if (!map.hasLayer(fallbackLayer)) {
-        fallbackLayer.addTo(map);
-      }
-    });
-
-    const fallbackLayer = L.tileLayer(
+    // Use CARTO Voyager / OpenStreetMap tiles (Reliable, high-res, keyless)
+    const cartoLayer = L.tileLayer(
       "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
       {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
         maxZoom: 19,
+        subdomains: "abcd",
       }
     );
 
-    tileLayer.addTo(map);
+    // Optional MapTiler layer if user provides a custom valid key in env
+    if (mapTilerKey && mapTilerKey !== "LJiRRVQ1VrBOvHYlVxt0" && mapTilerMapId) {
+      const tileUrl = `https://api.maptiler.com/maps/${mapTilerMapId}/256/{z}/{x}/{y}.png?key=${mapTilerKey}`;
+      const mapTilerLayer = L.tileLayer(tileUrl, {
+        attribution: '&copy; MapTiler &copy; OpenStreetMap',
+        maxZoom: 20,
+        tileSize: 256,
+        crossOrigin: true,
+      });
+
+      mapTilerLayer.on("tileerror", () => {
+        if (!map.hasLayer(cartoLayer)) {
+          map.removeLayer(mapTilerLayer);
+          cartoLayer.addTo(map);
+        }
+      });
+
+      mapTilerLayer.addTo(map);
+    } else {
+      cartoLayer.addTo(map);
+    }
 
     markersLayerRef.current = L.layerGroup().addTo(map);
     mapInstanceRef.current = map;
 
-    // Trigger invalidateSize to ensure Leaflet renders immediately inside flex/grid containers
     const timer = setTimeout(() => {
       map.invalidateSize();
     }, 250);
@@ -85,7 +88,7 @@ export function LiveMap({
     };
   }, []);
 
-  // Update markers when incidents or resources change
+  // Update markers and region overlays when incidents, resources, or radicalRegions change
   useEffect(() => {
     const map = mapInstanceRef.current;
     const markersLayer = markersLayerRef.current;
@@ -95,12 +98,41 @@ export function LiveMap({
 
     const bounds: L.LatLngExpression[] = [];
 
+    // 0. Render High-Risk / Radical Danger Zones as Circle Overlays
+    radicalRegions.forEach((reg) => {
+      if (!reg.enabled) return;
+      const color = reg.riskLevel === "extreme_radical" ? "#e11d48" : "#f59e0b";
+      const circle = L.circle([reg.centerLat, reg.centerLng], {
+        color: color,
+        fillColor: color,
+        fillOpacity: 0.15,
+        weight: 2,
+        dashArray: "6, 6",
+        radius: (reg.radiusKm || 3) * 1000,
+      });
+
+      circle.bindPopup(`
+        <div style="padding: 4px; font-size: 12px; font-family: sans-serif;">
+          <span style="font-size: 10px; font-weight: bold; text-transform: uppercase; background: ${reg.riskLevel === 'extreme_radical' ? '#ffe4e6' : '#fef3c7'}; color: ${reg.riskLevel === 'extreme_radical' ? '#9f1239' : '#92400e'}; padding: 2px 6px; border-radius: 4px;">
+            ${reg.riskLevel.replace("_", " ")}
+          </span>
+          <strong style="font-size: 13px; display: block; margin-top: 4px; color: #0f172a;">${reg.regionName}</strong>
+          <p style="margin-top: 4px; color: #475569; font-size: 11px;">
+            Predetermined Permissions: <b>Auto-Broadcasting SOS Enabled</b><br/>
+            Threshold: <b>${reg.autoDispatchThreshold} Citizen Report(s)</b><br/>
+            Rescuer Authority: <b>${reg.rescuerAuthorityLevel.replace(/_/g, " ")}</b>
+          </p>
+        </div>
+      `);
+
+      markersLayer.addLayer(circle);
+    });
+
     // 1. Render Incidents
     incidents.forEach((inc) => {
       let lat = inc.lat;
       let lng = inc.lng;
 
-      // Extract from location_wkt if lat/lng are missing (e.g. POINT(lng lat))
       if ((lat === undefined || lng === undefined) && inc.location_wkt) {
         const match = inc.location_wkt.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
         if (match) {
@@ -171,7 +203,7 @@ export function LiveMap({
       markersLayer.addLayer(marker);
     });
 
-    // 2. Render Resources
+    // 2. Render Resources & Rescuer Teams
     resources.forEach((res) => {
       let lat = res.lat;
       let lng = res.lng;
@@ -185,6 +217,7 @@ export function LiveMap({
       }
 
       if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) return;
+      bounds.push([lat, lng]);
 
       const availableCap = (res.capacity_total || 0) - (res.capacity_used || 0);
       const isAvailable = res.status === "available" && availableCap > 0;
@@ -202,23 +235,24 @@ export function LiveMap({
         className: "custom-resource-marker",
         html: `
           <div style="position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;">
-            <div style="width: 26px; height: 26px; border-radius: 6px; background: ${isAvailable ? "#4f46e5" : "#64748b"}; border: 2px solid white; color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 12px;">
+            <div style="position: absolute; width: 32px; height: 32px; border-radius: 8px; background: rgba(79, 70, 229, 0.3); animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+            <div style="width: 28px; height: 28px; border-radius: 8px; background: ${isAvailable ? "#4f46e5" : "#0284c7"}; border: 2px solid white; color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 13px;">
               ${resourceEmoji}
             </div>
             <div style="position: absolute; top: -16px; background: rgba(30, 27, 75, 0.95); color: white; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; white-space: nowrap;">
-              ${availableCap}/${res.capacity_total}
+              ${res.name.split(' ')[0]} (${availableCap}/${res.capacity_total})
             </div>
           </div>
         `,
-        iconSize: [26, 26],
-        iconAnchor: [13, 13],
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
       });
 
       const resMarker = L.marker([lat, lng], { icon: resourceIcon });
       resMarker.bindPopup(`
         <div style="padding: 4px; font-size: 12px; font-family: sans-serif;">
           <strong style="font-size: 13px; display: block; color: #0f172a;">${res.name}</strong>
-          <span style="font-size: 10px; color: #4f46e5; font-weight: bold; text-transform: uppercase;">${res.type}</span>
+          <span style="font-size: 10px; color: #4f46e5; font-weight: bold; text-transform: uppercase;">Type: ${res.type}</span>
           <p style="margin-top: 4px; color: #475569;">Available Capacity: <b>${availableCap}</b> / ${res.capacity_total}</p>
           <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; background: #e0e7ff; color: #3730a3;">Status: ${res.status}</span>
         </div>
@@ -227,7 +261,6 @@ export function LiveMap({
       markersLayer.addLayer(resMarker);
     });
 
-    // Auto-fit bounds if we have pins, otherwise keep default center
     if (bounds.length > 0) {
       try {
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
@@ -235,7 +268,7 @@ export function LiveMap({
         console.warn("Could not fit bounds:", e);
       }
     }
-  }, [incidents, resources, selectedIncidentId, onSelectIncident]);
+  }, [incidents, resources, radicalRegions, selectedIncidentId, onSelectIncident]);
 
   return (
     <div
@@ -260,3 +293,4 @@ export function LiveMap({
     </div>
   );
 }
+

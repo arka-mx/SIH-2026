@@ -1,32 +1,26 @@
-import mongoose, { Schema, type InferSchemaType } from "mongoose";
+import mongoose, { Schema, Document, Model } from "mongoose";
 
-export const ALLOCATION_STATUSES = ["recommended", "confirmed", "en_route", "at_scene", "resolved"] as const;
+export interface IAllocation extends Document {
+  report_id: string;
+  resource_id: string;
+  status: "recommended" | "confirmed" | "en_route" | "at_scene" | "resolved";
+  recommended_at: Date;
+  confirmed_at?: Date;
+  confirmed_by?: string;
+  created_at: Date;
+}
 
-const AllocationSchema = new Schema(
+const AllocationSchema = new Schema<IAllocation>(
   {
-    report_id: { type: Schema.Types.ObjectId, ref: "Report", required: true },
-    resource_id: { type: Schema.Types.ObjectId, ref: "Resource", required: true },
-    status: { type: String, enum: ALLOCATION_STATUSES, default: "recommended" },
+    report_id: { type: String, required: true },
+    resource_id: { type: String, required: true },
+    status: { type: String, enum: ["recommended", "confirmed", "en_route", "at_scene", "resolved"], default: "recommended" },
     recommended_at: { type: Date, default: Date.now },
-    confirmed_at: { type: Date, default: null },
-    confirmed_by: { type: String, default: null },
-    created_at: { type: Date, default: Date.now },
+    confirmed_at: { type: Date },
+    confirmed_by: { type: String },
   },
-  {
-    toJSON: {
-      transform(_doc, ret: Record<string, unknown>) {
-        ret.id = (ret._id as mongoose.Types.ObjectId).toString();
-        ret.report_id = (ret.report_id as mongoose.Types.ObjectId)?.toString();
-        ret.resource_id = (ret.resource_id as mongoose.Types.ObjectId)?.toString();
-        delete ret._id;
-        delete ret.__v;
-      },
-    },
-  }
+  { timestamps: { createdAt: "created_at", updatedAt: false } }
 );
 
-AllocationSchema.index({ report_id: 1, resource_id: 1 }, { unique: true });
-
-export type AllocationDoc = InferSchemaType<typeof AllocationSchema>;
-
-export default mongoose.models.Allocation || mongoose.model("Allocation", AllocationSchema);
+export const AllocationModel: Model<IAllocation> =
+  mongoose.models.Allocation || mongoose.model<IAllocation>("Allocation", AllocationSchema);
