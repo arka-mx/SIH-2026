@@ -21,7 +21,7 @@ const io = new SocketIOServer(server, {
 
 app.use(cors());
 app.use(express.json());
-
+app.use('/uploads', express.static('uploads'));
 // Serve static uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
