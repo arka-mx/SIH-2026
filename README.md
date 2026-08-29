@@ -96,9 +96,9 @@ Smarter matching than basic "nearest pin" queries:
 
 ## 🛠️ Tech Stack & Setup
 
-- **Frontend:** Next.js (App Router), Tailwind CSS
-- **State/Database:** PostgreSQL / PostGIS (or mock geo-spatial logic)
-- **Real-time:** WebSockets / Polling
+- **Full-stack:** Next.js (App Router + Route Handlers as the API), Tailwind CSS
+- **Database:** MongoDB (Mongoose), geospatial queries via 2dsphere indexes
+- **Real-time:** Client polling of REST endpoints
 
 ### Installation & Run
 
