@@ -1,0 +1,6 @@
+import { MapPin, Navigation } from "lucide-react";
+import { mockResources } from "@/data/mockResources";
+
+export function ResourceMap() {
+  return <section className="clay-panel resource-map-panel"><div className="flex items-center justify-between"><div><p className="eyebrow">Operational deployment</p><h2 className="section-title">Live resource map</h2></div><span className="live-pill"><i /> Live positions</span></div><div className="resource-map-surface"><div className="map-roads" /><div className="map-water" /><span className="map-label label-one">Brahmapur</span><span className="map-label label-two">Gopalpur</span><span className="map-label label-three">Khallikote</span>{mockResources.map((resource, index) => <div className={`resource-marker resource-marker-${index + 1} ${resource.status === "Available" ? "available" : resource.status === "En route" ? "moving" : resource.status === "At scene" ? "scene" : "offline"}`} key={resource.id} title={`${resource.name}: ${resource.status}`}><MapPin size={15} /></div>)}<div className="map-coordinates"><Navigation size={13} /> 19.3151 N, 84.7941 E</div></div><div className="resource-map-legend"><span><i className="legend-dot available" />Available</span><span><i className="legend-dot moving" />En route</span><span><i className="legend-dot scene" />At scene</span></div></section>;
+}
