@@ -4,7 +4,7 @@ import { ResourceModel } from "../lib/models/Resource";
 import { ReportModel } from "../lib/models/Report";
 import { AllocationModel } from "../lib/models/Allocation";
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/sih-2026";
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/sih-2026";
 
 // Mumbai Center: 19.0760, 72.8777
 const initialResources = [

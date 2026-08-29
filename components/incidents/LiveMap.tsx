@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import { useEffect, useRef, useState } from "react";
 import { ReportItem, ResourceItem } from "@/lib/api";
 import { RadicalRegionRule } from "@/types/rescuer";
 
@@ -14,6 +12,44 @@ interface LiveMapProps {
   onSelectIncident?: (incident: ReportItem) => void;
 }
 
+const OPENFREEMAP_STYLES = [
+  { id: "liberty", name: "Liberty Vector", url: "https://tiles.openfreemap.org/styles/liberty" },
+  { id: "bright", name: "Bright Vector", url: "https://tiles.openfreemap.org/styles/bright" },
+  { id: "dark", name: "Dark Mode", url: "https://tiles.openfreemap.org/styles/dark" },
+  { id: "positron", name: "Positron Light", url: "https://tiles.openfreemap.org/styles/positron" },
+];
+
+declare global {
+  interface Window {
+    maplibregl: any;
+  }
+}
+
+// Generate GeoJSON Circle for Danger Zones
+function createGeoJSONCircle(centerLng: number, centerLat: number, radiusInKm: number, points = 64) {
+  const km = radiusInKm;
+  const ret = [];
+  const distanceX = km / (111.320 * Math.cos((centerLat * Math.PI) / 180));
+  const distanceY = km / 110.574;
+
+  for (let i = 0; i < points; i++) {
+    const theta = (i / points) * (2 * Math.PI);
+    const x = distanceX * Math.cos(theta);
+    const y = distanceY * Math.sin(theta);
+    ret.push([centerLng + x, centerLat + y]);
+  }
+  ret.push(ret[0]);
+
+  return {
+    type: "Feature",
+    properties: {},
+    geometry: {
+      type: "Polygon",
+      coordinates: [ret],
+    },
+  };
+}
+
 export function LiveMap({
   incidents = [],
   resources = [],
@@ -22,253 +58,279 @@ export function LiveMap({
   onSelectIncident,
 }: LiveMapProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const mapInstanceRef = useRef<L.Map | null>(null);
-  const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
+  const [activeStyle, setActiveStyle] = useState<string>("liberty");
+  const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
-  // Initialize map
+  // 1. Dynamically Load MapLibre GL JS CSS & Script from CDN
   useEffect(() => {
-    if (!mapContainerRef.current) return;
-    if (mapInstanceRef.current) return;
-
-    // Default center to coastal hub coordinates (19.0760, 72.8777)
-    const map = L.map(mapContainerRef.current, {
-      center: [19.076, 72.8777],
-      zoom: 13,
-      zoomControl: true,
-      scrollWheelZoom: true,
-    });
-
-    const mapTilerKey = process.env.NEXT_PUBLIC_MAPTILER_KEY;
-    const mapTilerMapId = process.env.NEXT_PUBLIC_MAPTILER_MAP_ID;
-
-    // Use CARTO Voyager / OpenStreetMap tiles (Reliable, high-res, keyless)
-    const cartoLayer = L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-      {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
-        maxZoom: 19,
-        subdomains: "abcd",
-      }
-    );
-
-    // Optional MapTiler layer if user provides a custom valid key in env
-    if (mapTilerKey && mapTilerKey !== "LJiRRVQ1VrBOvHYlVxt0" && mapTilerMapId) {
-      const tileUrl = `https://api.maptiler.com/maps/${mapTilerMapId}/256/{z}/{x}/{y}.png?key=${mapTilerKey}`;
-      const mapTilerLayer = L.tileLayer(tileUrl, {
-        attribution: '&copy; MapTiler &copy; OpenStreetMap',
-        maxZoom: 20,
-        tileSize: 256,
-        crossOrigin: true,
-      });
-
-      mapTilerLayer.on("tileerror", () => {
-        if (!map.hasLayer(cartoLayer)) {
-          map.removeLayer(mapTilerLayer);
-          cartoLayer.addTo(map);
-        }
-      });
-
-      mapTilerLayer.addTo(map);
-    } else {
-      cartoLayer.addTo(map);
+    if (window.maplibregl) {
+      setIsLoaded(true);
+      return;
     }
 
-    markersLayerRef.current = L.layerGroup().addTo(map);
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css";
+    document.head.appendChild(link);
+
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js";
+    script.onload = () => {
+      setIsLoaded(true);
+    };
+    document.head.appendChild(script);
+  }, []);
+
+  // 2. Initialize OpenFreeMap Instance
+  useEffect(() => {
+    if (!isLoaded || !mapContainerRef.current) return;
+    if (mapInstanceRef.current) return;
+
+    const styleUrl = OPENFREEMAP_STYLES.find((s) => s.id === activeStyle)?.url || "https://tiles.openfreemap.org/styles/liberty";
+
+    const map = new window.maplibregl.Map({
+      container: mapContainerRef.current,
+      style: styleUrl,
+      center: [72.8777, 19.076], // [lng, lat]
+      zoom: 13,
+      pitch: 0,
+      bearing: 0,
+      attributionControl: true,
+    });
+
+    map.addControl(new window.maplibregl.NavigationControl(), "top-left");
+
     mapInstanceRef.current = map;
 
-    const timer = setTimeout(() => {
-      map.invalidateSize();
-    }, 250);
-
     return () => {
-      clearTimeout(timer);
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, []);
+  }, [isLoaded]);
 
-  // Update markers and region overlays when incidents, resources, or radicalRegions change
+  // 3. Switch OpenFreeMap Style dynamically
+  function handleStyleSwitch(styleId: string) {
+    setActiveStyle(styleId);
+    if (!mapInstanceRef.current) return;
+    const selected = OPENFREEMAP_STYLES.find((s) => s.id === styleId);
+    if (selected) {
+      mapInstanceRef.current.setStyle(selected.url);
+    }
+  }
+
+  // 4. Update Markers & GeoJSON Radical Regions when data or map changes
   useEffect(() => {
     const map = mapInstanceRef.current;
-    const markersLayer = markersLayerRef.current;
-    if (!map || !markersLayer) return;
+    if (!map || !isLoaded) return;
 
-    markersLayer.clearLayers();
+    // Clear existing markers
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
 
-    const bounds: L.LatLngExpression[] = [];
+    const bounds: [number, number][] = [];
 
-    // 0. Render High-Risk / Radical Danger Zones as Circle Overlays
-    radicalRegions.forEach((reg) => {
-      if (!reg.enabled) return;
-      const color = reg.riskLevel === "extreme_radical" ? "#e11d48" : "#f59e0b";
-      const circle = L.circle([reg.centerLat, reg.centerLng], {
-        color: color,
-        fillColor: color,
-        fillOpacity: 0.15,
-        weight: 2,
-        dashArray: "6, 6",
-        radius: (reg.radiusKm || 3) * 1000,
+    const renderLayersAndMarkers = () => {
+      // A. Render Radical Region Circle Layers
+      radicalRegions.forEach((reg, idx) => {
+        if (!reg.enabled) return;
+        const sourceId = `radical-source-${reg.id || idx}`;
+        const fillLayerId = `radical-fill-${reg.id || idx}`;
+        const lineLayerId = `radical-line-${reg.id || idx}`;
+
+        const circleGeoJSON = createGeoJSONCircle(reg.centerLng, reg.centerLat, reg.radiusKm || 3);
+        const color = reg.riskLevel === "extreme_radical" ? "#e11d48" : "#f59e0b";
+
+        if (map.getSource(sourceId)) {
+          (map.getSource(sourceId) as any).setData(circleGeoJSON);
+        } else {
+          map.addSource(sourceId, {
+            type: "geojson",
+            data: circleGeoJSON,
+          });
+
+          map.addLayer({
+            id: fillLayerId,
+            type: "fill",
+            source: sourceId,
+            paint: {
+              "fill-color": color,
+              "fill-opacity": 0.18,
+            },
+          });
+
+          map.addLayer({
+            id: lineLayerId,
+            type: "line",
+            source: sourceId,
+            paint: {
+              "line-color": color,
+              "line-width": 2,
+              "line-dasharray": [3, 3],
+            },
+          });
+        }
       });
 
-      circle.bindPopup(`
-        <div style="padding: 4px; font-size: 12px; font-family: sans-serif;">
-          <span style="font-size: 10px; font-weight: bold; text-transform: uppercase; background: ${reg.riskLevel === 'extreme_radical' ? '#ffe4e6' : '#fef3c7'}; color: ${reg.riskLevel === 'extreme_radical' ? '#9f1239' : '#92400e'}; padding: 2px 6px; border-radius: 4px;">
-            ${reg.riskLevel.replace("_", " ")}
-          </span>
-          <strong style="font-size: 13px; display: block; margin-top: 4px; color: #0f172a;">${reg.regionName}</strong>
-          <p style="margin-top: 4px; color: #475569; font-size: 11px;">
-            Predetermined Permissions: <b>Auto-Broadcasting SOS Enabled</b><br/>
-            Threshold: <b>${reg.autoDispatchThreshold} Citizen Report(s)</b><br/>
-            Rescuer Authority: <b>${reg.rescuerAuthorityLevel.replace(/_/g, " ")}</b>
-          </p>
-        </div>
-      `);
+      // B. Render Incidents
+      incidents.forEach((inc) => {
+        let lat = inc.lat;
+        let lng = inc.lng;
 
-      markersLayer.addLayer(circle);
-    });
-
-    // 1. Render Incidents
-    incidents.forEach((inc) => {
-      let lat = inc.lat;
-      let lng = inc.lng;
-
-      if ((lat === undefined || lng === undefined) && inc.location_wkt) {
-        const match = inc.location_wkt.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
-        if (match) {
-          lng = parseFloat(match[1]);
-          lat = parseFloat(match[2]);
+        if ((lat === undefined || lng === undefined) && inc.location_wkt) {
+          const match = inc.location_wkt.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
+          if (match) {
+            lng = parseFloat(match[1]);
+            lat = parseFloat(match[2]);
+          }
         }
-      }
 
-      if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) return;
+        if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) return;
+        bounds.push([lng, lat]);
 
-      bounds.push([lat, lng]);
+        const isSelected = selectedIncidentId === inc.id;
+        const isVerified = inc.status === "verified";
+        const isInProgress = inc.status === "in_progress";
+        const isResolved = inc.status === "resolved";
 
-      const isSelected = selectedIncidentId === inc.id;
-      const isVerified = inc.status === "verified";
-      const isInProgress = inc.status === "in_progress";
-      const isResolved = inc.status === "resolved";
+        let toneBg = "#f59e0b"; // amber
+        let statusLabel = "Unverified";
 
-      let toneBg = "#f59e0b"; // amber
-      let statusLabel = "Unverified";
+        if (isResolved) {
+          toneBg = "#64748b";
+          statusLabel = "Resolved";
+        } else if (isInProgress) {
+          toneBg = "#2563eb";
+          statusLabel = "In Progress";
+        } else if (isVerified) {
+          toneBg = "#059669";
+          statusLabel = "Verified";
+        }
 
-      if (isResolved) {
-        toneBg = "#64748b"; // slate
-        statusLabel = "Resolved";
-      } else if (isInProgress) {
-        toneBg = "#2563eb"; // blue
-        statusLabel = "In Progress";
-      } else if (isVerified) {
-        toneBg = "#059669"; // emerald
-        statusLabel = "Verified";
-      }
-
-      const customIcon = L.divIcon({
-        className: "custom-incident-marker",
-        html: `
-          <div style="position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;">
-            ${isVerified || isInProgress ? '<div style="position: absolute; width: 34px; height: 34px; border-radius: 9999px; background: rgba(16, 185, 129, 0.4); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>' : ''}
-            <div style="width: 28px; height: 28px; border-radius: 9999px; background: ${toneBg}; border: 2px solid white; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); ${isSelected ? 'transform: scale(1.25); outline: 3px solid #10b981;' : ''}">
-              ${inc.type ? inc.type[0].toUpperCase() : "!"}
-            </div>
-            <div style="position: absolute; top: 30px; background: rgba(15, 23, 42, 0.9); color: white; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-              ${inc.type} (${statusLabel})
-            </div>
+        const el = document.createElement("div");
+        el.className = "openfreemap-incident-marker";
+        el.style.cssText = "position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;";
+        el.innerHTML = `
+          ${isVerified || isInProgress ? '<div style="position: absolute; width: 34px; height: 34px; border-radius: 9999px; background: rgba(16, 185, 129, 0.4); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>' : ""}
+          <div style="width: 28px; height: 28px; border-radius: 9999px; background: ${toneBg}; border: 2px solid white; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); ${isSelected ? "transform: scale(1.25); outline: 3px solid #10b981;" : ""}">
+            ${inc.type ? inc.type[0].toUpperCase() : "!"}
           </div>
-        `,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
-      });
-
-      const marker = L.marker([lat, lng], { icon: customIcon });
-
-      marker.on("click", () => {
-        if (onSelectIncident) {
-          onSelectIncident(inc);
-        }
-      });
-
-      marker.bindPopup(`
-        <div style="padding: 4px; font-size: 12px; font-family: sans-serif;">
-          <strong style="text-transform: capitalize; font-size: 13px; display: block; color: #0f172a;">${inc.type} Incident</strong>
-          <span style="display: inline-block; padding: 2px 6px; margin-top: 4px; border-radius: 4px; font-size: 10px; font-weight: 600; ${
-            isVerified ? 'background: #d1fae5; color: #065f46;' : isInProgress ? 'background: #dbeafe; color: #1e40af;' : 'background: #fef3c7; color: #92400e;'
-          }">${statusLabel}</span>
-          <p style="margin-top: 6px; color: #475569; font-size: 11px;">${inc.description || "Emergency report filed"}</p>
-          <small style="color: #94a3b8; font-family: monospace; display: block; margin-top: 4px;">ID: ${inc.id.slice(0, 8)}</small>
-        </div>
-      `);
-
-      markersLayer.addLayer(marker);
-    });
-
-    // 2. Render Resources & Rescuer Teams
-    resources.forEach((res) => {
-      let lat = res.lat;
-      let lng = res.lng;
-
-      if ((lat === undefined || lng === undefined) && res.location_wkt) {
-        const match = res.location_wkt.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
-        if (match) {
-          lng = parseFloat(match[1]);
-          lat = parseFloat(match[2]);
-        }
-      }
-
-      if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) return;
-      bounds.push([lat, lng]);
-
-      const availableCap = (res.capacity_total || 0) - (res.capacity_used || 0);
-      const isAvailable = res.status === "available" && availableCap > 0;
-
-      const resourceEmoji =
-        res.type === "boat"
-          ? "🚤"
-          : res.type === "shelter"
-          ? "⛺"
-          : res.type === "ambulance" || res.type === "medical_van"
-          ? "🚑"
-          : "🚒";
-
-      const resourceIcon = L.divIcon({
-        className: "custom-resource-marker",
-        html: `
-          <div style="position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;">
-            <div style="position: absolute; width: 32px; height: 32px; border-radius: 8px; background: rgba(79, 70, 229, 0.3); animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
-            <div style="width: 28px; height: 28px; border-radius: 8px; background: ${isAvailable ? "#4f46e5" : "#0284c7"}; border: 2px solid white; color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 13px;">
-              ${resourceEmoji}
-            </div>
-            <div style="position: absolute; top: -16px; background: rgba(30, 27, 75, 0.95); color: white; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; white-space: nowrap;">
-              ${res.name.split(' ')[0]} (${availableCap}/${res.capacity_total})
-            </div>
+          <div style="position: absolute; top: 30px; background: rgba(15, 23, 42, 0.95); color: white; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+            ${inc.type} (${statusLabel})
           </div>
-        `,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
+        `;
+
+        el.addEventListener("click", () => {
+          if (onSelectIncident) onSelectIncident(inc);
+        });
+
+        const popup = new window.maplibregl.Popup({ offset: 25 }).setHTML(`
+          <div style="padding: 4px; font-size: 12px; font-family: sans-serif;">
+            <strong style="text-transform: capitalize; font-size: 13px; display: block; color: #0f172a;">${inc.type} Incident</strong>
+            <span style="display: inline-block; padding: 2px 6px; margin-top: 4px; border-radius: 4px; font-size: 10px; font-weight: 600; ${
+              isVerified ? "background: #d1fae5; color: #065f46;" : isInProgress ? "background: #dbeafe; color: #1e40af;" : "background: #fef3c7; color: #92400e;"
+            }">${statusLabel}</span>
+            <p style="margin-top: 6px; color: #475569; font-size: 11px;">${inc.description || "Emergency report filed"}</p>
+            <small style="color: #94a3b8; font-family: monospace; display: block; margin-top: 4px;">ID: ${inc.id.slice(0, 8)}</small>
+          </div>
+        `);
+
+        const marker = new window.maplibregl.Marker({ element: el })
+          .setLngLat([lng, lat])
+          .setPopup(popup)
+          .addTo(map);
+
+        markersRef.current.push(marker);
       });
 
-      const resMarker = L.marker([lat, lng], { icon: resourceIcon });
-      resMarker.bindPopup(`
-        <div style="padding: 4px; font-size: 12px; font-family: sans-serif;">
-          <strong style="font-size: 13px; display: block; color: #0f172a;">${res.name}</strong>
-          <span style="font-size: 10px; color: #4f46e5; font-weight: bold; text-transform: uppercase;">Type: ${res.type}</span>
-          <p style="margin-top: 4px; color: #475569;">Available Capacity: <b>${availableCap}</b> / ${res.capacity_total}</p>
-          <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; background: #e0e7ff; color: #3730a3;">Status: ${res.status}</span>
-        </div>
-      `);
+      // C. Render Resources & Rescue Teams
+      resources.forEach((res) => {
+        let lat = res.lat;
+        let lng = res.lng;
 
-      markersLayer.addLayer(resMarker);
-    });
+        if ((lat === undefined || lng === undefined) && res.location_wkt) {
+          const match = res.location_wkt.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
+          if (match) {
+            lng = parseFloat(match[1]);
+            lat = parseFloat(match[2]);
+          }
+        }
 
-    if (bounds.length > 0) {
-      try {
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
-      } catch (e) {
-        console.warn("Could not fit bounds:", e);
+        if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) return;
+        bounds.push([lng, lat]);
+
+        const availableCap = (res.capacity_total || 0) - (res.capacity_used || 0);
+        const isAvailable = res.status === "available" && availableCap > 0;
+
+        const resourceEmoji =
+          res.type === "boat"
+            ? "🚤"
+            : res.type === "shelter"
+            ? "⛺"
+            : res.type === "ambulance" || res.type === "medical_van"
+            ? "🚑"
+            : "🚒";
+
+        const el = document.createElement("div");
+        el.className = "openfreemap-resource-marker";
+        el.style.cssText = "position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;";
+        el.innerHTML = `
+          <div style="position: absolute; width: 32px; height: 32px; border-radius: 8px; background: rgba(79, 70, 229, 0.3); animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+          <div style="width: 28px; height: 28px; border-radius: 8px; background: ${isAvailable ? "#4f46e5" : "#0284c7"}; border: 2px solid white; color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 13px;">
+            ${resourceEmoji}
+          </div>
+          <div style="position: absolute; top: -16px; background: rgba(30, 27, 75, 0.95); color: white; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; white-space: nowrap;">
+            ${res.name.split(" ")[0]} (${availableCap}/${res.capacity_total})
+          </div>
+        `;
+
+        const popup = new window.maplibregl.Popup({ offset: 25 }).setHTML(`
+          <div style="padding: 4px; font-size: 12px; font-family: sans-serif;">
+            <strong style="font-size: 13px; display: block; color: #0f172a;">${res.name}</strong>
+            <span style="font-size: 10px; color: #4f46e5; font-weight: bold; text-transform: uppercase;">Type: ${res.type}</span>
+            <p style="margin-top: 4px; color: #475569;">Available Capacity: <b>${availableCap}</b> / ${res.capacity_total}</p>
+            <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; background: #e0e7ff; color: #3730a3;">Status: ${res.status}</span>
+          </div>
+        `);
+
+        const marker = new window.maplibregl.Marker({ element: el })
+          .setLngLat([lng, lat])
+          .setPopup(popup)
+          .addTo(map);
+
+        markersRef.current.push(marker);
+      });
+
+      // D. Fit bounds if points exist
+      if (bounds.length > 0) {
+        try {
+          const lats = bounds.map((b) => b[1]);
+          const lngs = bounds.map((b) => b[0]);
+          const minLat = Math.min(...lats);
+          const maxLat = Math.max(...lats);
+          const minLng = Math.min(...lngs);
+          const maxLng = Math.max(...lngs);
+
+          map.fitBounds(
+            [
+              [minLng, minLat],
+              [maxLng, maxLat],
+            ],
+            { padding: 50, maxZoom: 14, duration: 1000 }
+          );
+        } catch (e) {
+          console.warn("Could not fit OpenFreeMap bounds:", e);
+        }
       }
+    };
+
+    if (map.isStyleLoaded()) {
+      renderLayersAndMarkers();
+    } else {
+      map.once("style.load", renderLayersAndMarkers);
     }
-  }, [incidents, resources, radicalRegions, selectedIncidentId, onSelectIncident]);
+  }, [incidents, resources, radicalRegions, selectedIncidentId, onSelectIncident, isLoaded, activeStyle]);
 
   return (
     <div
@@ -282,6 +344,47 @@ export function LiveMap({
         zIndex: 1,
       }}
     >
+      {/* OpenFreeMap Style Switcher Bar */}
+      <div
+        style={{
+          position: "absolute",
+          top: "10px",
+          right: "10px",
+          zIndex: 10,
+          background: "rgba(15, 23, 42, 0.85)",
+          backdropFilter: "blur(8px)",
+          padding: "4px 8px",
+          borderRadius: "8px",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          border: "1px solid rgba(255, 255, 255, 0.15)",
+        }}
+      >
+        <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: "bold", textTransform: "uppercase", paddingRight: "4px" }}>
+          🗺️ OpenFreeMap:
+        </span>
+        {OPENFREEMAP_STYLES.map((st) => (
+          <button
+            key={st.id}
+            onClick={() => handleStyleSwitch(st.id)}
+            style={{
+              padding: "3px 8px",
+              borderRadius: "5px",
+              fontSize: "11px",
+              fontWeight: "bold",
+              border: "none",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              background: activeStyle === st.id ? "#3b82f6" : "rgba(255, 255, 255, 0.1)",
+              color: activeStyle === st.id ? "#ffffff" : "#cbd5e1",
+            }}
+          >
+            {st.name}
+          </button>
+        ))}
+      </div>
+
       <div
         ref={mapContainerRef}
         style={{
@@ -293,4 +396,5 @@ export function LiveMap({
     </div>
   );
 }
+
 

@@ -78,7 +78,7 @@ export function IncidentMap({
           </span>
         </div>
         <div className="flex items-center gap-1 font-mono text-[11px] text-stone-400">
-          <Navigation size={12} /> PostGIS Spatial Index
+          <Navigation size={12} /> OpenFreeMap Vector Engine (Free & Keyless)
         </div>
       </div>
     </Card>
