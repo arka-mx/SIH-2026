@@ -11,8 +11,6 @@ dist/
 # Uploads (user-generated content)
 uploads/
 
-
-
 # OS files
 .DS_Store
 Thumbs.db
