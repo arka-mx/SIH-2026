@@ -14,12 +14,13 @@ import {
   apiGetAllIncidents, 
   apiGetAllResources, 
   apiGetAutomatedPermissions, 
-  apiGetResponseTeamRequests, 
-  apiGetCitizenResponses, 
-  ReportItem, 
-  ResourceItem 
+  apiGetResponseTeamRequests,
+  apiGetCitizenResponses,
+  apiGetRescuerLocations,
+  ReportItem,
+  ResourceItem
 } from "@/lib/api";
-import { PredeterminedPermissionSettings, ResponseTeamRequest, CitizenResponse } from "@/types/rescuer";
+import { PredeterminedPermissionSettings, ResponseTeamRequest, CitizenResponse, RescuerUnitProfile } from "@/types/rescuer";
 import { useRealtimeIncidents } from "@/lib/socket";
 import { Radio, RefreshCw, Sparkles, ShieldAlert, Zap, ArrowRight, Truck, Users } from "lucide-react";
 
@@ -27,6 +28,7 @@ export default function AdminPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [selectedIncident, setSelectedIncident] = useState<ReportItem | null>(null);
   const [resources, setResources] = useState<ResourceItem[]>([]);
+  const [rescuers, setRescuers] = useState<RescuerUnitProfile[]>([]);
   const [permissions, setPermissions] = useState<PredeterminedPermissionSettings | null>(null);
   const [teamRequests, setTeamRequests] = useState<ResponseTeamRequest[]>([]);
   const [citizenResponses, setCitizenResponses] = useState<CitizenResponse[]>([]);
@@ -34,15 +36,17 @@ export default function AdminPage() {
 
   async function fetchFreshData() {
     try {
-      const [incData, resData, permData, reqData, citData] = await Promise.all([
+      const [incData, resData, permData, reqData, citData, rescData] = await Promise.all([
         apiGetAllIncidents(),
         apiGetAllResources(),
         apiGetAutomatedPermissions(),
         apiGetResponseTeamRequests(),
         apiGetCitizenResponses(),
+        apiGetRescuerLocations(),
       ]);
       setIncidents(incData);
       setResources(resData);
+      setRescuers(rescData);
       setPermissions(permData);
       setTeamRequests(reqData);
       setCitizenResponses(citData);
@@ -105,6 +109,7 @@ export default function AdminPage() {
           <IncidentMap
             incidents={incidents}
             resources={resources}
+            rescuers={rescuers}
             radicalRegions={permissions?.regions || []}
             selectedIncidentId={selectedIncident?.id}
             onSelectIncident={handleSelectIncident}

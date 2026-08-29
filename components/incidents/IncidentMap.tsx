@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { Navigation, Radio } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { ReportItem, ResourceItem } from "@/lib/api";
-import { RadicalRegionRule } from "@/types/rescuer";
+import { RadicalRegionRule, RescuerUnitProfile } from "@/types/rescuer";
 
 const DynamicLiveMap = dynamic(
   () => import("./LiveMap").then((mod) => mod.LiveMap),
@@ -22,6 +22,7 @@ const DynamicLiveMap = dynamic(
 interface IncidentMapProps {
   incidents?: ReportItem[];
   resources?: ResourceItem[];
+  rescuers?: RescuerUnitProfile[];
   radicalRegions?: RadicalRegionRule[];
   selectedIncidentId?: string | null;
   onSelectIncident?: (incident: ReportItem) => void;
@@ -31,6 +32,7 @@ interface IncidentMapProps {
 export function IncidentMap({
   incidents = [],
   resources = [],
+  rescuers = [],
   radicalRegions = [],
   selectedIncidentId,
   onSelectIncident,
@@ -54,6 +56,7 @@ export function IncidentMap({
       <DynamicLiveMap
         incidents={incidents}
         resources={resources}
+        rescuers={rescuers}
         radicalRegions={radicalRegions}
         selectedIncidentId={selectedIncidentId}
         onSelectIncident={onSelectIncident}
@@ -72,6 +75,9 @@ export function IncidentMap({
           </span>
           <span className="flex items-center gap-1.5 font-medium">
             <span className="w-2.5 h-2.5 rounded-md bg-indigo-600" /> Rescue Team / Resource Giver
+          </span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <span className="w-2.5 h-2.5 rounded-full border-2 border-emerald-600 bg-white" /> Live Rescuer GPS (pulsing = status)
           </span>
           <span className="flex items-center gap-1.5 font-medium text-rose-700">
             <span className="w-2.5 h-2.5 rounded-full border border-rose-500 bg-rose-100" /> High-Risk Danger Zone

@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
         type: "Point",
         coordinates: [lng, lat],
       },
-    });
+    } as Record<string, unknown>);
 
     // Check clustering: find unverified reports within ~200m and 15 mins
     const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       type,
       status: "unverified",
       created_at: { $gte: fifteenMinsAgo },
-    });
+    } as Record<string, unknown>);
 
     const nearbyCluster = candidateReports.filter((r) => {
       const [rLng, rLat] = r.location.coordinates;

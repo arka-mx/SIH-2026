@@ -1,8 +1,16 @@
-import { 
-  ResponseTeamRequest, 
-  CitizenResponse, 
-  PredeterminedPermissionSettings, 
-  RadicalRegionRule 
+import {
+  ResponseTeamRequest,
+  CitizenResponse,
+  PredeterminedPermissionSettings,
+  RadicalRegionRule,
+  RescuerUnitProfile
+} from "@/types/rescuer";
+
+export type {
+  ResponseTeamRequest,
+  CitizenResponse,
+  PredeterminedPermissionSettings,
+  RadicalRegionRule,
 } from "@/types/rescuer";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : "";
@@ -205,6 +213,62 @@ let inMemoryPermissionSettings: PredeterminedPermissionSettings = {
     },
   ],
 };
+
+// In-memory state for Live Rescuer / Resource Giver GPS Locations
+const inMemoryRescuerLocations: RescuerUnitProfile[] = [
+  {
+    id: "res-1", name: "Brahmapur NDRF Boat Unit", callsign: "BOAT-DELTA-03", type: "boat",
+    leaderName: "Insp. S. Mohanty", phone: "+91 90000 11111", status: "at_scene",
+    lat: 19.316, lng: 84.793, assignedReportId: "INC-101", assignmentSource: "admin_dispatch",
+    supplies: {
+      foodRationKits: 12, foodRationCapacity: 30, waterLiters: 40, waterCapacityLiters: 200,
+      medicalKits: 3, medicalKitsCapacity: 10, ivFluidsCount: 6, shelterBedsAvailable: 0,
+      shelterBedsTotal: 0, lifeJackets: 14, fuelLiters: 55, satPhoneBatteryPct: 72,
+    },
+  },
+  {
+    id: "res-2", name: "City Hospital Rapid Ambulance", callsign: "MED-UNIT-102", type: "ambulance",
+    leaderName: "Dr. A. Rao", phone: "+91 90000 22222", status: "en_route",
+    lat: 19.321, lng: 84.799, assignedReportId: "INC-102", assignmentSource: "nearest_fallback",
+    supplies: {
+      foodRationKits: 0, foodRationCapacity: 0, waterLiters: 10, waterCapacityLiters: 20,
+      medicalKits: 8, medicalKitsCapacity: 12, ivFluidsCount: 20, shelterBedsAvailable: 0,
+      shelterBedsTotal: 0, lifeJackets: 2, fuelLiters: 38, satPhoneBatteryPct: 90,
+    },
+  },
+  {
+    id: "res-3", name: "Rescue Team Alpha", callsign: "RESCUE-ALPHA-01", type: "rescue_team",
+    leaderName: "Cmdr. V. Singh", phone: "+91 90000 33333", status: "available",
+    lat: 19.309, lng: 84.802, assignedReportId: null, assignmentSource: null,
+    supplies: {
+      foodRationKits: 20, foodRationCapacity: 40, waterLiters: 120, waterCapacityLiters: 300,
+      medicalKits: 6, medicalKitsCapacity: 15, ivFluidsCount: 10, shelterBedsAvailable: 0,
+      shelterBedsTotal: 0, lifeJackets: 25, fuelLiters: 80, satPhoneBatteryPct: 64,
+    },
+  },
+  {
+    id: "res-4", name: "Coastal Relief Shelter Hub", callsign: "SHELTER-HUB-01", type: "shelter",
+    leaderName: "Ms. R. Behera", phone: "+91 90000 44444", status: "at_scene",
+    lat: 19.327, lng: 84.788, assignedReportId: null, assignmentSource: null,
+    supplies: {
+      foodRationKits: 60, foodRationCapacity: 120, waterLiters: 500, waterCapacityLiters: 1000,
+      medicalKits: 10, medicalKitsCapacity: 25, ivFluidsCount: 15, shelterBedsAvailable: 45,
+      shelterBedsTotal: 80, lifeJackets: 5, fuelLiters: 20, satPhoneBatteryPct: 100,
+    },
+  },
+];
+
+export async function apiGetRescuerLocations(): Promise<RescuerUnitProfile[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/rescuer-locations`, { cache: "no-store" });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // fallback
+  }
+  return inMemoryRescuerLocations;
+}
 
 // ── Response Team Requests Endpoints ──
 
