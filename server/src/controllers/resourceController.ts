@@ -1,6 +1,23 @@
 import { Request, Response } from "express";
 import { Server as SocketIOServer } from "socket.io";
-import { updateResourceStatus } from "../services/resourceService";
+import { getAllResources, updateResourceStatus } from "../services/resourceService";
+
+/**
+ * GET /api/resources — list all resources.
+ */
+export async function listResourcesHandler(
+  _req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const resources = await getAllResources();
+    res.json(resources);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("❌ Error listing resources:", message);
+    res.status(500).json({ error: message });
+  }
+}
 
 /**
  * PUT /api/resources/:id/status — update a resource's status.

@@ -28,6 +28,20 @@ export interface UpdatedResource {
 // ── Service Functions ──────────────────────────
 
 /**
+ * Get all resources with their spatial location.
+ */
+export async function getAllResources(): Promise<UpdatedResource[]> {
+  const result = await pool.query(
+    `SELECT
+      "id", "name", "type", "capacity_total", "capacity_used", "status", "disaster_types", "created_at",
+      ST_AsText("location") AS location_wkt
+     FROM "Resource"
+     ORDER BY "created_at" ASC`
+  );
+  return result.rows;
+}
+
+/**
  * Update a resource's status with transition validation.
  */
 export async function updateResourceStatus(

@@ -1,6 +1,79 @@
-import { MapPin, Navigation } from "lucide-react";
-import { Card } from "@/components/ui/Card";
+"use client";
 
-export function IncidentMap() {
-  return <Card className="map-panel"><div className="flex items-center justify-between"><div><p className="eyebrow">Situation overview</p><h2 className="section-title">Live incident map</h2></div><span className="live-pill"><i /> Live feed</span></div><div className="map-surface"><div className="map-roads" /><div className="map-water" /><span className="map-label label-one">Brahmapur</span><span className="map-label label-two">Gosaninuagaon</span><span className="map-label label-three">Gopalpur</span><div className="map-marker marker-one"><MapPin size={17} /></div><div className="map-marker marker-two"><MapPin size={17} /></div><div className="map-coordinates"><Navigation size={13} /> 19.3151 N, 84.7941 E</div></div></Card>;
+import dynamic from "next/dynamic";
+import { Navigation, Radio } from "lucide-react";
+import { Card } from "@/components/ui/Card";
+import { ReportItem, ResourceItem } from "@/lib/api";
+
+const DynamicLiveMap = dynamic(
+  () => import("./LiveMap").then((mod) => mod.LiveMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full min-h-[420px] bg-stone-100 flex flex-col items-center justify-center text-stone-500 rounded-xl">
+        <Radio className="animate-spin text-emerald-600 mb-2" size={24} />
+        <span className="text-xs font-semibold">Initializing GeoSpatial Command Map...</span>
+      </div>
+    ),
+  }
+);
+
+interface IncidentMapProps {
+  incidents?: ReportItem[];
+  resources?: ResourceItem[];
+  selectedIncidentId?: string | null;
+  onSelectIncident?: (incident: ReportItem) => void;
+  isConnected?: boolean;
+}
+
+export function IncidentMap({
+  incidents = [],
+  resources = [],
+  selectedIncidentId,
+  onSelectIncident,
+  isConnected = true,
+}: IncidentMapProps) {
+  return (
+    <Card className="map-panel !p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="eyebrow">District Situation Overview</p>
+          <h2 className="section-title">Live Response & Geo-Clustering Map</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`live-pill ${isConnected ? "!bg-emerald-100 !text-emerald-800" : "!bg-amber-100 !text-amber-800"}`}>
+            <i className={`w-2 h-2 rounded-full ${isConnected ? "bg-emerald-600 animate-ping" : "bg-amber-600"}`} />
+            {isConnected ? "Live Socket Feed" : "Connecting..."}
+          </span>
+        </div>
+      </div>
+
+      <DynamicLiveMap
+        incidents={incidents}
+        resources={resources}
+        selectedIncidentId={selectedIncidentId}
+        onSelectIncident={onSelectIncident}
+      />
+
+      <div className="mt-3 flex items-center justify-between text-xs text-stone-500 pt-2 border-t border-stone-100 flex-wrap gap-2">
+        <div className="flex items-center gap-4 text-[11px]">
+          <span className="flex items-center gap-1.5 font-medium">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Unverified Report
+          </span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" /> Auto-Verified (3+ cluster)
+          </span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-600" /> Active Dispatch
+          </span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <span className="w-2.5 h-2.5 rounded-md bg-indigo-600" /> Available Resource
+          </span>
+        </div>
+        <div className="flex items-center gap-1 font-mono text-[11px] text-stone-400">
+          <Navigation size={12} /> PostGIS Spatial Index
+        </div>
+      </div>
+    </Card>
+  );
 }
