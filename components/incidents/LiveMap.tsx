@@ -41,19 +41,18 @@ export function LiveMap({
     const mapTilerKey = process.env.NEXT_PUBLIC_MAPTILER_KEY;
     const mapTilerMapId = process.env.NEXT_PUBLIC_MAPTILER_MAP_ID;
 
-    // Use CARTO Voyager / OpenStreetMap tiles (Reliable, high-res, keyless)
-    const cartoLayer = L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-      {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
-        maxZoom: 19,
-        subdomains: "abcd",
-      }
-    );
+    // Standard OpenStreetMap raster tiles — genuinely free, no API key required.
+    // (CARTO's basemaps.cartocdn.com raster endpoint now gates behind an API
+    // key and returns "API KEY REQUIRED" placeholder tiles, so it can't be
+    // used as the keyless default any more.)
+    const osmLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
+      maxZoom: 19,
+      subdomains: "abc",
+    });
 
-    // Optional MapTiler layer if user provides a custom valid key in env
-    if (mapTilerKey && mapTilerKey !== "LJiRRVQ1VrBOvHYlVxt0" && mapTilerMapId) {
+    // Optional MapTiler layer if the user provides their own valid key in env
+    if (mapTilerKey && mapTilerMapId) {
       const tileUrl = `https://api.maptiler.com/maps/${mapTilerMapId}/256/{z}/{x}/{y}.png?key=${mapTilerKey}`;
       const mapTilerLayer = L.tileLayer(tileUrl, {
         attribution: '&copy; MapTiler &copy; OpenStreetMap',
@@ -63,15 +62,15 @@ export function LiveMap({
       });
 
       mapTilerLayer.on("tileerror", () => {
-        if (!map.hasLayer(cartoLayer)) {
+        if (!map.hasLayer(osmLayer)) {
           map.removeLayer(mapTilerLayer);
-          cartoLayer.addTo(map);
+          osmLayer.addTo(map);
         }
       });
 
       mapTilerLayer.addTo(map);
     } else {
-      cartoLayer.addTo(map);
+      osmLayer.addTo(map);
     }
 
     markersLayerRef.current = L.layerGroup().addTo(map);
