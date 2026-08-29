@@ -6,11 +6,12 @@ import { AutomatedAlertPermissions } from "@/components/admin/AutomatedAlertPerm
 import { 
   apiGetAutomatedPermissions, 
   apiGetCitizenResponses, 
-  apiGetResponseTeamRequests, 
-  apiGetAllIncidents, 
-  ReportItem 
+  apiGetResponseTeamRequests,
+  apiGetAllIncidents,
+  apiGetRescuerLocations,
+  ReportItem
 } from "@/lib/api";
-import { PredeterminedPermissionSettings, CitizenResponse, ResponseTeamRequest } from "@/types/rescuer";
+import { PredeterminedPermissionSettings, CitizenResponse, ResponseTeamRequest, RescuerUnitProfile } from "@/types/rescuer";
 import { IncidentMap } from "@/components/incidents/IncidentMap";
 import { ResponseTeamRequests } from "@/components/admin/ResponseTeamRequests";
 import { CitizenResponsesFeed } from "@/components/admin/CitizenResponsesFeed";
@@ -21,18 +22,21 @@ export default function AdminPermissionsPage() {
   const [incidents, setIncidents] = useState<ReportItem[]>([]);
   const [teamRequests, setTeamRequests] = useState<ResponseTeamRequest[]>([]);
   const [citizenResponses, setCitizenResponses] = useState<CitizenResponse[]>([]);
+  const [rescuers, setRescuers] = useState<RescuerUnitProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function loadData() {
     try {
-      const [permData, incData, reqData, citData] = await Promise.all([
+      const [permData, incData, reqData, citData, rescData] = await Promise.all([
         apiGetAutomatedPermissions(),
         apiGetAllIncidents(),
         apiGetResponseTeamRequests(),
         apiGetCitizenResponses(),
+        apiGetRescuerLocations(),
       ]);
       setPermissions(permData);
       setIncidents(incData);
+      setRescuers(rescData);
       setTeamRequests(reqData);
       setCitizenResponses(citData);
     } catch (err) {
@@ -78,6 +82,7 @@ export default function AdminPermissionsPage() {
 
         <IncidentMap
           incidents={incidents}
+          rescuers={rescuers}
           radicalRegions={permissions?.regions || []}
         />
       </div>

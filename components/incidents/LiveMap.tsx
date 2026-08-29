@@ -2,15 +2,31 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ReportItem, ResourceItem } from "@/lib/api";
-import { RadicalRegionRule } from "@/types/rescuer";
+import { RadicalRegionRule, RescuerUnitProfile } from "@/types/rescuer";
 
 interface LiveMapProps {
   incidents: ReportItem[];
   resources?: ResourceItem[];
+  rescuers?: RescuerUnitProfile[];
   radicalRegions?: RadicalRegionRule[];
   selectedIncidentId?: string | null;
   onSelectIncident?: (incident: ReportItem) => void;
 }
+
+const RESCUER_VEHICLE_ICON: Record<string, string> = {
+  boat: "🚤",
+  ambulance: "🚑",
+  medical_van: "🚑",
+  rescue_team: "🚒",
+  shelter: "🚚",
+};
+
+const RESCUER_STATUS_COLOR: Record<string, string> = {
+  available: "#059669",
+  en_route: "#2563eb",
+  at_scene: "#e11d48",
+  resting: "#64748b",
+};
 
 const OPENFREEMAP_STYLES = [
   { id: "liberty", name: "Liberty Vector", url: "https://tiles.openfreemap.org/styles/liberty" },
@@ -53,6 +69,7 @@ function createGeoJSONCircle(centerLng: number, centerLat: number, radiusInKm: n
 export function LiveMap({
   incidents = [],
   resources = [],
+  rescuers = [],
   radicalRegions = [],
   selectedIncidentId,
   onSelectIncident,
@@ -62,6 +79,7 @@ export function LiveMap({
   const markersRef = useRef<any[]>([]);
   const [activeStyle, setActiveStyle] = useState<string>("liberty");
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
+  const [layers, setLayers] = useState({ incidents: true, teams: true, zones: true });
 
   // 1. Dynamically Load MapLibre GL JS CSS & Script from CDN
   useEffect(() => {
@@ -134,10 +152,17 @@ export function LiveMap({
     const renderLayersAndMarkers = () => {
       // A. Render Radical Region Circle Layers
       radicalRegions.forEach((reg, idx) => {
-        if (!reg.enabled) return;
         const sourceId = `radical-source-${reg.id || idx}`;
         const fillLayerId = `radical-fill-${reg.id || idx}`;
         const lineLayerId = `radical-line-${reg.id || idx}`;
+
+        const shouldShow = reg.enabled && layers.zones;
+        if (!shouldShow) {
+          if (map.getLayer(fillLayerId)) map.removeLayer(fillLayerId);
+          if (map.getLayer(lineLayerId)) map.removeLayer(lineLayerId);
+          if (map.getSource(sourceId)) map.removeSource(sourceId);
+          return;
+        }
 
         const circleGeoJSON = createGeoJSONCircle(reg.centerLng, reg.centerLat, reg.radiusKm || 3);
         const color = reg.riskLevel === "extreme_radical" ? "#e11d48" : "#f59e0b";
@@ -174,7 +199,7 @@ export function LiveMap({
       });
 
       // B. Render Incidents
-      incidents.forEach((inc) => {
+      (layers.incidents ? incidents : []).forEach((inc) => {
         let lat = inc.lat;
         let lng = inc.lng;
 
@@ -245,7 +270,7 @@ export function LiveMap({
       });
 
       // C. Render Resources & Rescue Teams
-      resources.forEach((res) => {
+      (layers.teams ? resources : []).forEach((res) => {
         let lat = res.lat;
         let lng = res.lng;
 
@@ -302,6 +327,50 @@ export function LiveMap({
         markersRef.current.push(marker);
       });
 
+      // C2. Render Live Rescuer / Resource Giver GPS Pins
+      (layers.teams ? rescuers : []).forEach((unit) => {
+        const lat = unit.lat;
+        const lng = unit.lng;
+        if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) return;
+        bounds.push([lng, lat]);
+
+        const ring = RESCUER_STATUS_COLOR[unit.status] || "#059669";
+        const emoji = RESCUER_VEHICLE_ICON[unit.type] || "🚒";
+        const beds = unit.supplies.shelterBedsTotal > 0
+          ? `${unit.supplies.shelterBedsAvailable}/${unit.supplies.shelterBedsTotal} beds`
+          : `${unit.supplies.lifeJackets} jackets · ${unit.supplies.medicalKits} med kits`;
+
+        const el = document.createElement("div");
+        el.className = "openfreemap-rescuer-marker";
+        el.style.cssText = "position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;";
+        el.innerHTML = `
+          <div style="position: absolute; width: 38px; height: 38px; border-radius: 9999px; background: ${ring}55; animation: ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+          <div style="width: 30px; height: 30px; border-radius: 9999px; background: white; border: 3px solid ${ring}; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 14px;">
+            ${emoji}
+          </div>
+          <div style="position: absolute; top: -16px; background: ${ring}; color: white; font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: bold; white-space: nowrap;">
+            ${unit.callsign}
+          </div>
+        `;
+
+        const popup = new window.maplibregl.Popup({ offset: 25 }).setHTML(`
+          <div style="padding: 4px; font-size: 12px; font-family: sans-serif;">
+            <strong style="font-size: 13px; display: block; color: #0f172a;">${unit.name}</strong>
+            <span style="font-size: 10px; color: ${ring}; font-weight: bold; text-transform: uppercase;">${unit.type.replace("_", " ")} · ${unit.status.replace("_", " ")}</span>
+            <p style="margin-top: 4px; color: #475569;">Capacity: <b>${beds}</b></p>
+            <p style="margin-top: 2px; color: #475569;">Lead: ${unit.leaderName} · ${unit.phone}</p>
+            ${unit.assignedReportId ? `<small style="color: #94a3b8; font-family: monospace;">Assigned: ${unit.assignedReportId}</small>` : ""}
+          </div>
+        `);
+
+        const marker = new window.maplibregl.Marker({ element: el })
+          .setLngLat([lng, lat])
+          .setPopup(popup)
+          .addTo(map);
+
+        markersRef.current.push(marker);
+      });
+
       // D. Fit bounds if points exist
       if (bounds.length > 0) {
         try {
@@ -330,7 +399,7 @@ export function LiveMap({
     } else {
       map.once("style.load", renderLayersAndMarkers);
     }
-  }, [incidents, resources, radicalRegions, selectedIncidentId, onSelectIncident, isLoaded, activeStyle]);
+  }, [incidents, resources, rescuers, radicalRegions, layers, selectedIncidentId, onSelectIncident, isLoaded, activeStyle]);
 
   return (
     <div
@@ -381,6 +450,51 @@ export function LiveMap({
             }}
           >
             {st.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Layer Filter Bar */}
+      <div
+        style={{
+          position: "absolute",
+          top: "10px",
+          left: "50px",
+          zIndex: 10,
+          background: "rgba(15, 23, 42, 0.85)",
+          backdropFilter: "blur(8px)",
+          padding: "4px 8px",
+          borderRadius: "8px",
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          border: "1px solid rgba(255, 255, 255, 0.15)",
+        }}
+      >
+        <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: "bold", textTransform: "uppercase", paddingRight: "4px" }}>
+          Layers:
+        </span>
+        {([
+          { key: "incidents", label: "Incidents" },
+          { key: "teams", label: "Teams / Givers" },
+          { key: "zones", label: "Danger Zones" },
+        ] as const).map((l) => (
+          <button
+            key={l.key}
+            onClick={() => setLayers((prev) => ({ ...prev, [l.key]: !prev[l.key] }))}
+            style={{
+              padding: "3px 8px",
+              borderRadius: "5px",
+              fontSize: "11px",
+              fontWeight: "bold",
+              border: "none",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              background: layers[l.key] ? "#3b82f6" : "rgba(255, 255, 255, 0.1)",
+              color: layers[l.key] ? "#ffffff" : "#cbd5e1",
+            }}
+          >
+            {layers[l.key] ? "● " : "○ "}{l.label}
           </button>
         ))}
       </div>
