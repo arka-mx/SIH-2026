@@ -243,7 +243,7 @@ let FALLBACK_RESOURCES: ResourceItem[] = [
   },
 ];
 
-let inMemoryIncidents: ReportItem[] = [];
+let inMemoryIncidents: ReportItem[] = loadFromStorage("all_incidents", []);
 
 // In-memory state for Response Team Requests
 let inMemoryTeamRequests: ResponseTeamRequest[] = [];
@@ -698,14 +698,17 @@ export async function apiSubmitReport(formData: FormData): Promise<{ report: Rep
       : (data.report as ReportItem);
 
     if (normalized?.id) {
+      inMemoryIncidents = loadFromStorage("all_incidents", inMemoryIncidents);
       inMemoryIncidents = inMemoryIncidents.filter((i) => i.id !== normalized.id);
       inMemoryIncidents.unshift(normalized);
+      saveToStorage("all_incidents", inMemoryIncidents);
     }
     return { ...data, report: normalized };
   } catch (err) {
     console.warn("Backend API not reachable for submitReport, creating local report:", err);
     const deviceId = (formData.get("device_id") as string) || (formData.get("session_id") as string) || "dev-local-session";
 
+    inMemoryIncidents = loadFromStorage("all_incidents", inMemoryIncidents);
     const existingInc = inMemoryIncidents.find(
       (i) => (i.device_id === deviceId || i.session_id === deviceId) && i.status !== "resolved" && i.status !== "cancelled"
     );
@@ -717,6 +720,7 @@ export async function apiSubmitReport(formData: FormData): Promise<{ report: Rep
       if (desc) {
         existingInc.description = existingInc.description ? `${existingInc.description} | ${desc}` : desc;
       }
+      saveToStorage("all_incidents", inMemoryIncidents);
       return { report: existingInc, action: "UPDATED" };
     }
 
@@ -740,6 +744,7 @@ export async function apiSubmitReport(formData: FormData): Promise<{ report: Rep
       action: "CREATED",
     };
     inMemoryIncidents.unshift(newRep);
+    saveToStorage("all_incidents", inMemoryIncidents);
     return { report: newRep, action: "CREATED" };
   }
 }
@@ -755,6 +760,7 @@ export async function apiGetCitizenReports(sessionId: string): Promise<ReportIte
   } catch {
     // fallback
   }
+  inMemoryIncidents = loadFromStorage("all_incidents", inMemoryIncidents);
   return inMemoryIncidents.filter((i) => i.session_id === sessionId);
 }
 
@@ -765,6 +771,7 @@ export async function apiGetActiveReportForSession(sessionId: string): Promise<R
 }
 
 export async function apiGetIncidentById(incidentId: string): Promise<ReportItem | null> {
+  inMemoryIncidents = loadFromStorage("all_incidents", inMemoryIncidents);
   const local = inMemoryIncidents.find((i) => i.id === incidentId);
   if (local) return local;
 
@@ -776,6 +783,7 @@ export async function apiGetIncidentById(incidentId: string): Promise<ReportItem
     if (remote) {
       inMemoryIncidents = inMemoryIncidents.filter((i) => i.id !== remote.id);
       inMemoryIncidents.unshift(remote);
+      saveToStorage("all_incidents", inMemoryIncidents);
       return remote;
     }
   } catch {
@@ -787,6 +795,7 @@ export async function apiGetIncidentById(incidentId: string): Promise<ReportItem
 // ── Authority / Incidents Endpoints ──
 
 export async function apiGetAllIncidents(): Promise<ReportItem[]> {
+  inMemoryIncidents = loadFromStorage("all_incidents", inMemoryIncidents);
   let serverIncidents: ReportItem[] = [];
   try {
     const res = await fetch(`${API_BASE_URL}/api/incidents`, {
@@ -805,12 +814,18 @@ export async function apiGetAllIncidents(): Promise<ReportItem[]> {
   const combinedMap = new Map<string, ReportItem>();
   inMemoryIncidents.forEach((inc) => combinedMap.set(inc.id, inc));
   serverIncidents.forEach((inc) => {
-    if (!combinedMap.has(inc.id)) {
+    const existing = combinedMap.get(inc.id);
+    if (existing) {
+      combinedMap.set(inc.id, { ...existing, ...inc });
+    } else {
       combinedMap.set(inc.id, inc);
     }
   });
 
-  return Array.from(combinedMap.values());
+  const merged = Array.from(combinedMap.values());
+  inMemoryIncidents = merged;
+  saveToStorage("all_incidents", merged);
+  return merged;
 }
 
 export async function apiGetAllResources(): Promise<ResourceItem[]> {
@@ -909,6 +924,7 @@ export async function apiConfirmAllocation(reportId: string, resourceId: string)
         }
       : inc
   );
+  saveToStorage("all_incidents", inMemoryIncidents);
 
   if (serverResult) return serverResult;
 
@@ -1113,6 +1129,7 @@ export async function apiResolveIncident(incidentId: string): Promise<{
   resource?: ResourceItem;
 }> {
   inMemoryIncidents = inMemoryIncidents.map((inc) => (inc.id === incidentId ? { ...inc, status: "resolved" } : inc));
+  saveToStorage("all_incidents", inMemoryIncidents);
   const updatedIncident = inMemoryIncidents.find((i) => i.id === incidentId)!;
 
   try {
@@ -1190,6 +1207,7 @@ export async function apiCancelSos(
       ? { ...inc, status: "cancelled" as const }
       : inc
   );
+  saveToStorage("all_incidents", inMemoryIncidents);
 
   try {
     const res = await fetch(`${API_BASE_URL}/api/rescue/cancel`, {
