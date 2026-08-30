@@ -15,14 +15,14 @@ export function RescuerShell({
   status = "available",
 }: RescuerShellProps) {
   return (
-    <div className="min-h-screen bg-stone-100/70 text-stone-900 flex flex-col font-sans">
+    <div className="admin-shell">
       <RescuerHeader
         currentRescuerId={rescuerId}
         rescuerName={rescuerName}
         status={status}
       />
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        {children}
+      <main className="rescuer-main">
+        <div className="space-y-6">{children}</div>
       </main>
     </div>
   );

@@ -1,6 +1,6 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { ReportModel } from "@/lib/models/Report";
-import { PublicHeader } from "@/components/public/PublicHeader";
+import { BackButton } from "@/components/public/BackButton";
 import { 
   Heart, 
   MapPin, 
@@ -31,8 +31,8 @@ export default async function SafeStatusPage({ params }: PageProps) {
 
   if (!report) {
     return (
-      <main className="public-home">
-        <PublicHeader />
+      <main className="public-home theme-light">
+        <BackButton />
         <section className="max-w-md mx-auto my-12 p-8 bg-white/80 backdrop-blur-md border border-[#e3cda9] rounded-2xl shadow-xl text-center">
           <AlertTriangle size={48} className="mx-auto text-amber-600 mb-4" />
           <h1 className="text-xl font-bold text-stone-900">Safety Report Not Found</h1>
@@ -54,8 +54,8 @@ export default async function SafeStatusPage({ params }: PageProps) {
   const coordinates = report.location?.coordinates || [0, 0];
 
   return (
-    <main className="public-home min-h-screen bg-gradient-to-b from-[#fffaf0] via-[#f7f9f3] to-[#eef4ea]">
-      <PublicHeader />
+    <main className="public-home theme-light min-h-screen">
+      <BackButton />
       <section className="max-w-2xl mx-auto my-10 px-4">
         {/* Safety Header Banner */}
         <div className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-6 rounded-3xl mb-6 shadow-md border border-emerald-500/20 text-center relative overflow-hidden">

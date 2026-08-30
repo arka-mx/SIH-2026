@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectToDatabase } from "@/lib/mongodb";
-import { AdminUserModel } from "@/lib/models/AdminUser";
 import crypto from "crypto";
+import { createSession } from "@/lib/auth-session";
+
+function safeEqual(a: string, b: string) {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,30 +16,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Username and password required" }, { status: 400 });
     }
 
-    await connectToDatabase();
-    const user = await AdminUserModel.findOne({ username });
-    if (!user) {
+    const expectedUsername = process.env.ADMIN_USERNAME;
+    const expectedPassword = process.env.ADMIN_PASSWORD;
+    if (!expectedUsername || !expectedPassword) {
+      return NextResponse.json({ error: "Admin credentials not configured" }, { status: 500 });
+    }
+
+    if (!safeEqual(username, expectedUsername) || !safeEqual(password, expectedPassword)) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
-    const testHash = crypto.pbkdf2Sync(password, user.passwordSalt, 1000, 64, "sha512").toString("hex");
-    if (testHash !== user.passwordHash) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
-    }
+    await createSession({ role: "admin", sub: expectedUsername, name: "Coordinator" });
 
-    const response = NextResponse.json({ 
-      success: true, 
-      user: { username: user.username, name: user.name, role: user.role } 
-    });
-
-    // Set HTTP-only cookie for secure administration access
-    response.headers.set(
-      "Set-Cookie",
-      `momentum_admin_session=${user.username}; Path=/; HttpOnly; Max-Age=86400; SameSite=Lax`
-    );
-
-    return response;
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Login failed" }, { status: 500 });
+    return NextResponse.json({ ok: true, redirect: "/admin" });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Login failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

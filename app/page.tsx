@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { ArrowRight, Languages, ShieldCheck, UsersRound, Truck } from "lucide-react";
+import { ArrowRight, ShieldCheck, UsersRound, Truck, Info } from "lucide-react";
+import { useLanguage } from "@/lib/language";
 
 const TRANSLATIONS = {
   English: {
@@ -18,6 +18,7 @@ const TRANSLATIONS = {
     rescuerDesc: "Track supplies, shelters & auto-nearest disaster handoff",
     citizenTitle: "Citizen Access",
     citizenDesc: "Report an incident or pledge community resources",
+    panelNote: "Not sure which to choose? Contact your district disaster management office.",
   },
   Hindi: {
     heroKicker: "सामुदायिक प्रतिक्रिया नेटवर्क",
@@ -32,6 +33,7 @@ const TRANSLATIONS = {
     rescuerDesc: "आपूर्ति, आश्रयों और स्वतः-निकटतम आपदा हैंडऑफ़ को ट्रैक करें",
     citizenTitle: "नागरिक एक्सेस",
     citizenDesc: "घटना की रिपोर्ट करें या सामुदायिक संसाधनों की प्रतिज्ञा करें",
+    panelNote: "यकीन नहीं कि कौन सा चुनें? अपने जिला आपदा प्रबंधन कार्यालय से संपर्क करें।",
   },
   Bengali: {
     heroKicker: "কমিউনিটি রেসপন্স নেটওয়ার্ক",
@@ -46,6 +48,7 @@ const TRANSLATIONS = {
     rescuerDesc: "সরবরাহ, আশ্রয়কেন্দ্র এবং স্বয়ংক্রিয়-নিকটবর্তী দুর্যোগ হ্যান্ডঅফ ট্র্যাক করুন",
     citizenTitle: "নাগরিক অ্যাক্সেস",
     citizenDesc: "একটি ঘটনার রিপোর্ট করুন বা কমিউনিটি সম্পদ দান করুন",
+    panelNote: "কোনটি বেছে নেবেন নিশ্চিত নন? আপনার জেলা দুর্যোগ ব্যবস্থাপনা দপ্তরে যোগাযোগ করুন।",
   },
   Odia: {
     heroKicker: "ସାମୁଦାୟିକ ପ୍ରତିକ୍ରିୟା ନେଟୱର୍କ",
@@ -60,6 +63,7 @@ const TRANSLATIONS = {
     rescuerDesc: "ସାମଗ୍ରୀ, ଆଶ୍ରୟସ୍ଥଳ ଏବଂ ସ୍ୱୟଂକ୍ରିୟ ବିପର୍ଯ୍ୟୟ ହ୍ୟାଣ୍ଡଅଫ୍ ଟ୍ରାକ୍ କରନ୍ତୁ",
     citizenTitle: "ନାଗରିକ ପ୍ରବେଶ",
     citizenDesc: "ଏକ ଜରୁରୀ ପରିସ୍ଥିତି ରିପୋର୍ଟ କରନ୍ତୁ କିମ୍ବା ସାମୁଦାୟିକ ସମ୍ପଦ ଦାନ କରନ୍ତୁ",
+    panelNote: "କେଉଁଟି ବାଛିବେ ନିଶ୍ଚିତ ନାହାନ୍ତି? ଆପଣଙ୍କ ଜିଲ୍ଲା ବିପର୍ଯ୍ୟୟ ପରିଚାଳନା କାର୍ଯ୍ୟାଳୟ ସହ ଯୋଗାଯୋଗ କରନ୍ତୁ।",
   },
   Telugu: {
     heroKicker: "కమ్యూనిటీ రెస్పాన్స్ నెట్‌వర్క్",
@@ -74,87 +78,24 @@ const TRANSLATIONS = {
     rescuerDesc: "సరఫరా, ఆశ్రయాలు & స్వయంచాలక విపత్తు హ్యాండ్‌ఆఫ్‌లను ట్రాక్ చేయండి",
     citizenTitle: "సిటిజన్ యాక్సెస్",
     citizenDesc: "ఘటనను నివేదించండి లేదా సంఘం వనరులను ప్రతిజ్ఞ చేయండి",
+    panelNote: "ఏది ఎంచుకోవాలో తెలియడం లేదా? మీ జిల్లా విపత్తు నిర్వహణ కార్యాలయాన్ని సంప్రదించండి.",
   }
 };
 
 type SupportedLang = "English" | "Hindi" | "Bengali" | "Odia" | "Telugu";
 
-const STORAGE_KEY = "momentum_language";
-
-const LEGACY_CODE_MAP: Record<string, SupportedLang> = {
-  en: "English",
-  hi: "Hindi",
-  bn: "Bengali",
-  or: "Odia",
-  te: "Telugu",
-};
-
-function normalizeLang(value: string | null): SupportedLang | null {
-  if (!value) return null;
-  if (value in TRANSLATIONS) return value as SupportedLang;
-  return LEGACY_CODE_MAP[value] ?? null;
-}
-
 export default function Home() {
-  const [lang, setLang] = useState<SupportedLang>("English");
-
-  // Load the stored preference once, after mount (avoids SSR/hydration mismatch).
-  useEffect(() => {
-    try {
-      const stored = normalizeLang(localStorage.getItem(STORAGE_KEY));
-      if (stored) setLang(stored);
-    } catch {
-      /* localStorage unavailable — keep default */
-    }
-  }, []);
-
-  const t = TRANSLATIONS[lang] ?? TRANSLATIONS.English;
-
-  function handleLanguageChange(selected: string) {
-    const value = normalizeLang(selected) ?? "English";
-    setLang(value);
-    try {
-      localStorage.setItem(STORAGE_KEY, value);
-    } catch {
-      /* ignore persistence failure */
-    }
-  }
+  const { name } = useLanguage();
+  const lang = (name in TRANSLATIONS ? name : "English") as SupportedLang;
+  const t = TRANSLATIONS[lang];
 
   return (
-    <main className="public-home">
-      <header className="public-header">
-        <div className="public-brand">
-          <ShieldCheck size={25} />
-          <span>MOMENTUM</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/" className="home-button">
-            <span>HOME</span>
-          </Link>
-        </div>
-      </header>
-
+    <main className="public-home theme-light">
       <section className="home-hero">
         <div className="home-copy">
           <p className="hero-kicker">{t.heroKicker}</p>
           <h1>{t.title}</h1>
           <p>{t.subtitle}</p>
-
-          <div className="language-picker">
-            <Languages size={17} />
-            <label htmlFor="language">{t.languageLabel}</label>
-            <select 
-              id="language" 
-              value={lang} 
-              onChange={(e) => handleLanguageChange(e.target.value)}
-            >
-              <option value="English">English</option>
-              <option value="Hindi">Hindi (हिन्दी)</option>
-              <option value="Bengali">Bengali (বাংলা)</option>
-              <option value="Odia">Odia (ଓଡ଼ିଆ)</option>
-              <option value="Telugu">Telugu (తెలుగు)</option>
-            </select>
-          </div>
         </div>
 
         <div className="access-panel">
@@ -189,6 +130,11 @@ export default function Home() {
               <ArrowRight size={18} />
             </Link>
           </div>
+
+          <p className="panel-note">
+            <Info size={15} />
+            <span>{t.panelNote}</span>
+          </p>
         </div>
       </section>
     </main>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ReportItem, ResourceItem } from "@/lib/api";
 import { RadicalRegionRule, RescuerUnitProfile } from "@/types/rescuer";
+import { getStoredAdminLocation } from "@/lib/adminLocation";
 
 interface LiveMapProps {
   incidents: ReportItem[];
@@ -123,11 +124,19 @@ export function LiveMap({
 
     const styleUrl = OPENFREEMAP_STYLES.find((s) => s.id === activeStyle)?.url || "https://tiles.openfreemap.org/styles/liberty";
 
+    // Start on the admin's chosen operating area (fitBounds takes over once
+    // there are incidents/resources to frame). Falls back to a national view.
+    const adminLoc = getStoredAdminLocation();
+    const initialCenter: [number, number] =
+      adminLoc && adminLoc.lat != null && adminLoc.lng != null
+        ? [adminLoc.lng, adminLoc.lat]
+        : [78.9629, 22.5937];
+
     const map = new window.maplibregl.Map({
       container: mapContainerRef.current,
       style: styleUrl,
-      center: [72.8777, 19.076], // [lng, lat]
-      zoom: 13,
+      center: initialCenter, // [lng, lat]
+      zoom: adminLoc ? 12 : 4,
       pitch: 0,
       bearing: 0,
       attributionControl: true,

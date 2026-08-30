@@ -22,12 +22,11 @@ import {
 } from "@/lib/api";
 import { PredeterminedPermissionSettings, ResponseTeamRequest, CitizenResponse, RescuerUnitProfile } from "@/types/rescuer";
 import { useRealtimeIncidents } from "@/lib/socket";
-import { Radio, RefreshCw, Sparkles, ShieldAlert, Zap, ArrowRight, Truck, Users } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 export default function AdminPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [selectedIncident, setSelectedIncident] = useState<ReportItem | null>(null);
-  const [selectedRegion, setSelectedRegion] = useState<string>("all");
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [rescuers, setRescuers] = useState<RescuerUnitProfile[]>([]);
   const [permissions, setPermissions] = useState<PredeterminedPermissionSettings | null>(null);
@@ -66,25 +65,9 @@ export default function AdminPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Unique region list for regionwise filtering
-  const availableRegions = Array.from(
-    new Set(
-      incidents
-        .map((i) => i.region || (i.address ? i.address.split(",")[0] : "General Region"))
-        .filter(Boolean)
-    )
-  );
-
-  const regionFilteredIncidents = selectedRegion === "all"
-    ? incidents
-    : incidents.filter((i) => {
-        const reg = i.region || i.address || "";
-        return reg.toLowerCase().includes(selectedRegion.toLowerCase());
-      });
-
-  const verified = regionFilteredIncidents.filter((i) => i.status === "verified");
-  const inProgress = regionFilteredIncidents.filter((i) => i.status === "in_progress");
-  const unverified = regionFilteredIncidents.filter((i) => i.status === "unverified");
+  const verified = incidents.filter((i) => i.status === "verified");
+  const inProgress = incidents.filter((i) => i.status === "in_progress");
+  const unverified = incidents.filter((i) => i.status === "unverified");
 
   function handleSelectIncident(inc: ReportItem) {
     setSelectedIncident(inc);
@@ -92,115 +75,50 @@ export default function AdminPage() {
 
   return (
     <AdminShell>
-      {/* Banner for Predetermined Permissions & Radical Regions */}
-      <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white p-4 rounded-2xl mb-4 flex items-center justify-between flex-wrap gap-3 shadow-sm border border-purple-800">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-purple-500/20 text-purple-300 rounded-xl border border-purple-500/30">
-            <Zap size={22} className="text-purple-400 animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase font-bold tracking-wider bg-purple-500/30 text-purple-200 px-2 py-0.5 rounded border border-purple-500/30">
-                Predetermined Admin Rules
-              </span>
-              <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
-                <i className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" /> Auto-Alert System Active
-              </span>
-            </div>
-            <h2 className="text-sm font-bold text-white mt-0.5">
-              Direct Citizen-to-Rescuer Auto-Alerting for Radical Disaster Regions
-            </h2>
-          </div>
-        </div>
-
-        <Link
-          href="/admin/permissions"
-          className="bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-3 py-2 rounded-xl border border-white/20 flex items-center gap-1 backdrop-blur-md"
-        >
-          Manage Rules <ArrowRight size={14} />
+      <div className="page-heading">
+        <h1>Dashboard</h1>
+        <Link href="/admin/permissions" className="adm-btn">
+          Auto-alert rules <ArrowRight size={14} />
         </Link>
       </div>
 
-      {/* Regionwise Emergency Routing Filter Bar */}
-      <div className="bg-white border border-stone-200 p-3 rounded-2xl mb-4 flex items-center justify-between flex-wrap gap-3 shadow-2xs">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-extrabold text-stone-800 flex items-center gap-1.5">
-            📍 Regionwise Dispatch Jurisdiction:
-          </span>
-          <span className="text-xs font-bold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full border border-stone-200">
-            {selectedRegion === "all" ? "Showing All Regions" : `Region: ${selectedRegion}`}
-          </span>
-        </div>
+      <EmergencyStats incidents={incidents} />
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setSelectedRegion("all")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              selectedRegion === "all"
-                ? "bg-slate-900 text-white shadow-2xs"
-                : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-            }`}
-          >
-            🌐 All Regions ({incidents.length})
-          </button>
-          {availableRegions.map((reg) => (
-            <button
-              key={reg}
-              type="button"
-              onClick={() => setSelectedRegion(reg)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                selectedRegion === reg
-                  ? "bg-emerald-600 text-white shadow-2xs"
-                  : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
-              }`}
-            >
-              📍 {reg}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between mb-4">
-        <EmergencyStats incidents={incidents} />
-      </div>
-
-      {/* Automated Operations Brief Section */}
-      <div className="bg-[#fffcf5] border border-[#e8dcc4] p-5 rounded-2xl mb-5 shadow-2xs">
-        <h3 className="text-xs font-black uppercase tracking-wider text-[#9c592e] flex items-center gap-1.5 mb-2.5">
-          <Sparkles size={15} className="text-[#d77e37] animate-pulse" /> AUTOMATED MOMENTUM OPS BRIEF
-        </h3>
-        <div className="text-xs text-stone-700">
+      {/* Status brief */}
+      <div className="adm-card adm-card--plain mb-6">
+        <h3 className="eyebrow mb-3">Status</h3>
+        <div className="text-xs text-slate-700">
           {(() => {
             const active = incidents.filter((i) => i.status !== "resolved");
-            const critical = active.filter((i) => 
-              i.type === "fire" || 
-              i.type === "medical" || 
+            const critical = active.filter((i) =>
+              i.type === "fire" ||
+              i.type === "medical" ||
               (i.description && i.description.includes("Injured:") && !i.description.includes("Injured: 0"))
             ).length;
             const pending = active.filter((i) => i.status === "unverified" || i.status === "verified").length;
             const fullShelters = resources.filter((r) => r.type === "shelter" && (r.capacity_used / r.capacity_total) >= 0.7).length;
 
-            const briefs = [];
+            const briefs: { tone: string; label: string; text: string }[] = [];
             if (critical > 0) {
-              briefs.push(`⚠️ ${critical} critical incident${critical > 1 ? "s" : ""} require${critical === 1 ? "s" : ""} active resource coordination.`);
+              briefs.push({ tone: "adm-status--red", label: "Critical", text: `${critical} incident${critical > 1 ? "s" : ""} need resources` });
             } else {
-              briefs.push(`✓ No active life-safety or fire hazards reported in the current window.`);
+              briefs.push({ tone: "adm-status--green", label: "Critical", text: `None active` });
             }
             if (pending > 0) {
-              briefs.push(`⏳ ${pending} incident report${pending > 1 ? "s are" : " is"} pending dispatch validation.`);
+              briefs.push({ tone: "adm-status--amber", label: "Pending", text: `${pending} report${pending > 1 ? "s" : ""} to validate` });
             }
             if (fullShelters > 0) {
-              briefs.push(`🚨 ${fullShelters} emergency shelter${fullShelters > 1 ? "s are" : " is"} near capacity (>70%).`);
+              briefs.push({ tone: "adm-status--red", label: "Shelters", text: `${fullShelters} above 70% full` });
             } else {
-              briefs.push(`✓ All district emergency camps are operating within normal occupancy limits.`);
+              briefs.push({ tone: "adm-status--green", label: "Shelters", text: `Within capacity` });
             }
 
             return (
               <ul className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {briefs.map((b, idx) => (
-                  <li key={idx} className="bg-white/80 p-3 rounded-xl border border-stone-200/60 font-semibold text-stone-800 flex items-start gap-2 shadow-3xs">
-                    {b}
+                  <li key={idx} className="border border-slate-200 bg-white p-3 flex flex-col gap-2 text-slate-700">
+                    <span className={`adm-status ${b.tone}`}>{b.label}</span>
+                    {b.text}
                   </li>
                 ))}
               </ul>
@@ -222,16 +140,14 @@ export default function AdminPage() {
           />
 
           {selectedIncident && (
-            <div className="p-1">
+            <div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-bold text-stone-900 flex items-center gap-1.5">
-                  <ShieldAlert size={16} className="text-emerald-600" /> Selected Active Incident (Map Inspection)
-                </h3>
-                <button 
+                <h3 className="eyebrow">Selected incident</h3>
+                <button
                   onClick={() => setSelectedIncident(null)}
-                  className="text-xs text-stone-500 hover:text-stone-800"
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-900"
                 >
-                  Clear Selection
+                  Clear
                 </button>
               </div>
               <IncidentCard
@@ -244,93 +160,84 @@ export default function AdminPage() {
         </div>
 
         <div className="dashboard-side space-y-4">
-          {/* Verified / Dispatch Ready Cases */}
+          {/* Ready to dispatch */}
           <DashboardCard
-            title="Verified (Ready for Dispatch)"
+            title="Ready to dispatch"
             count={verified.length}
             href="/admin/verified"
           >
             {verified.length === 0 ? (
-              <div className="p-3 text-xs text-stone-400 text-center">
-                No verified cases awaiting dispatch.
-              </div>
+              <div className="p-3 text-xs text-slate-400 text-center">None</div>
             ) : (
               verified.slice(0, 4).map((incident) => (
                 <div
-                  className={`mini-row cursor-pointer hover:bg-emerald-50/50 p-2 rounded transition-all ${
-                    selectedIncident?.id === incident.id ? "bg-emerald-50 ring-1 ring-emerald-400" : ""
+                  className={`mini-row cursor-pointer transition-colors hover:bg-slate-50 ${
+                    selectedIncident?.id === incident.id ? "bg-slate-50" : ""
                   }`}
                   key={incident.id}
                   onClick={() => handleSelectIncident(incident)}
                 >
                   <div>
-                    <strong className="capitalize flex items-center gap-1">
-                      {incident.type} Incident
-                      <Sparkles size={12} className="text-emerald-600" />
-                    </strong>
-                    <span className="text-[11px] text-stone-500">
-                      {incident.location_wkt || "GPS Location"}
+                    <strong className="capitalize">{incident.type} incident</strong>
+                    <span className="text-[11px] text-slate-500">
+                      {incident.location_wkt || "GPS location"}
                     </span>
                   </div>
-                  <Badge tone="green">Verified (3+)</Badge>
+                  <Badge tone="green">Verified</Badge>
                 </div>
               ))
             )}
           </DashboardCard>
 
-          {/* In Progress Deployments */}
+          {/* In progress */}
           <DashboardCard
-            title="Active Dispatches (In Progress)"
+            title="In progress"
             count={inProgress.length}
             href="/admin/verified"
           >
             {inProgress.length === 0 ? (
-              <div className="p-3 text-xs text-stone-400 text-center">
-                No active dispatches currently en route.
-              </div>
+              <div className="p-3 text-xs text-slate-400 text-center">None</div>
             ) : (
               inProgress.slice(0, 3).map((incident) => (
                 <div
-                  className="mini-row cursor-pointer hover:bg-blue-50/50 p-2 rounded"
+                  className="mini-row cursor-pointer transition-colors hover:bg-slate-50"
                   key={incident.id}
                   onClick={() => handleSelectIncident(incident)}
                 >
                   <div>
                     <strong className="capitalize">{incident.type}</strong>
-                    <span className="text-[11px] text-stone-500">
-                      {incident.location_wkt || "GPS Location"}
+                    <span className="text-[11px] text-slate-500">
+                      {incident.location_wkt || "GPS location"}
                     </span>
                   </div>
-                  <Badge tone="neutral">En Route</Badge>
+                  <Badge tone="neutral">En route</Badge>
                 </div>
               ))
             )}
           </DashboardCard>
 
-          {/* Unverified Reports */}
+          {/* Unverified */}
           <DashboardCard
-            title="Unverified incoming reports"
+            title="Unverified"
             count={unverified.length}
             href="/admin/unverified"
           >
             {unverified.length === 0 ? (
-              <div className="p-3 text-xs text-stone-400 text-center">
-                No unverified reports pending.
-              </div>
+              <div className="p-3 text-xs text-slate-400 text-center">None</div>
             ) : (
               unverified.slice(0, 4).map((incident) => (
                 <div
-                  className="mini-row cursor-pointer hover:bg-amber-50/50 p-2 rounded"
+                  className="mini-row cursor-pointer transition-colors hover:bg-slate-50"
                   key={incident.id}
                   onClick={() => handleSelectIncident(incident)}
                 >
                   <div>
                     <strong className="capitalize">{incident.type}</strong>
-                    <span className="text-[11px] text-stone-500">
-                      {incident.location_wkt || "GPS Location"}
+                    <span className="text-[11px] text-slate-500">
+                      {incident.location_wkt || "GPS location"}
                     </span>
                   </div>
-                  <Badge tone="amber">1-2 Reports</Badge>
+                  <Badge tone="amber">1–2 reports</Badge>
                 </div>
               ))
             )}
@@ -338,12 +245,11 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Response Team Requests & Citizen Responses Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+      {/* Response team requests & citizen responses */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5">
         <ResponseTeamRequests requests={teamRequests} onRefresh={fetchFreshData} />
         <CitizenResponsesFeed responses={citizenResponses} />
       </div>
     </AdminShell>
   );
 }
-

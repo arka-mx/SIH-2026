@@ -1,24 +1,21 @@
 "use client";
 
-import { FormEvent, useState, useEffect } from "react";
-import { 
-  ShieldCheck, 
-  MapPin, 
-  Navigation, 
-  Award, 
-  Users, 
-  ArrowRight, 
-  CheckCircle2, 
-  Radio, 
-  Lock,
-  Globe,
-  Truck,
+import { FormEvent, useState } from "react";
+import { useLanguage } from "@/lib/language";
+import {
+  ShieldCheck,
+  Navigation,
+  Crown,
+  HardHat,
+  ArrowRight,
+  ArrowLeft,
   AlertCircle
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { PublicHeader } from "@/components/public/PublicHeader";
+import { signInWithPopup } from "firebase/auth";
+import { BackButton } from "@/components/public/BackButton";
 import { apiReverseGeocode } from "@/lib/api";
-import { saveRescuerSession, RescuerUserSession } from "@/lib/rescuerAuth";
+import { auth, googleProvider } from "@/lib/firebase";
 
 const TRANSLATIONS = {
   English: {
@@ -82,18 +79,17 @@ type SupportedLang = "English" | "Hindi" | "Bengali" | "Odia" | "Telugu";
 
 export default function RescuerLoginPage() {
   const router = useRouter();
-  const [lang, setLang] = useState<SupportedLang>("English");
+  const { name: lang } = useLanguage();
 
-  // Auth & Profile fields
-  const [googleEmail, setGoogleEmail] = useState("commander.verma@ndrf.gov.in");
-  const [googleName, setGoogleName] = useState("Captain Rajesh Verma");
+  // Google identity (populated by Firebase sign-in)
+  const [googleEmail, setGoogleEmail] = useState("");
+  const [googleName, setGoogleName] = useState("");
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Profile fields
   const [isTeamHead, setIsTeamHead] = useState<boolean>(true);
-  const [rescuerId, setRescuerId] = useState(
-    process.env.NEXT_PUBLIC_DEFAULT_RESCUER_ID || "demo-team-alpha"
-  );
-  const [password, setPassword] = useState(
-    process.env.NEXT_PUBLIC_DEFAULT_RESCUER_PASSWORD || "rescuer123"
-  );
+  const rescuerId = process.env.NEXT_PUBLIC_DEFAULT_RESCUER_ID || "demo-team-alpha";
 
   // Office Location fields
   const [officeName, setOfficeName] = useState("Brahmapur Regional Disaster Command");
@@ -106,22 +102,7 @@ export default function RescuerLoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const stored = localStorage.getItem("momentum_language");
-    if (stored === "Hindi" || stored === "hi") {
-      setLang("Hindi");
-    } else if (stored === "Bengali" || stored === "bn") {
-      setLang("Bengali");
-    } else if (stored === "Odia" || stored === "or") {
-      setLang("Odia");
-    } else if (stored === "Telugu" || stored === "te") {
-      setLang("Telugu");
-    } else {
-      setLang("English");
-    }
-  }, []);
-
-  const t = TRANSLATIONS[lang] || TRANSLATIONS.English;
+  const t = TRANSLATIONS[lang as SupportedLang] || TRANSLATIONS.English;
 
   async function handleDetectOfficeGPS() {
     if (!navigator.geolocation) return;
@@ -148,9 +129,26 @@ export default function RescuerLoginPage() {
     );
   }
 
-  function handleGoogleLoginSimulate(e: React.FormEvent) {
-    e.preventDefault();
-    setAuthStep("profile");
+  async function handleGoogleSignIn() {
+    setError(null);
+    setGoogleLoading(true);
+    try {
+      const { user } = await signInWithPopup(auth, googleProvider);
+      setGoogleEmail(user.email ?? "");
+      setGoogleName(user.displayName ?? "");
+      setPhotoUrl(user.photoURL ?? "");
+      setAuthStep("profile");
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code;
+      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+        // user dismissed the popup — nothing to report
+      } else {
+        console.error("Google sign-in failed:", err);
+        setError("Google sign-in failed. Please try again.");
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
   }
 
   async function handleCompleteSetup(e: React.FormEvent) {
@@ -159,54 +157,60 @@ export default function RescuerLoginPage() {
     setLoading(true);
 
     try {
-      const session: RescuerUserSession = {
-        id: "usr-" + Math.random().toString(36).substring(2, 8),
-        email: googleEmail,
-        name: googleName,
-        isTeamHead,
-        officeName,
-        officeLat,
-        officeLng,
-        regionRadiusKm: regionRadius,
-        loggedInAt: new Date().toISOString(),
-      };
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        setError("Your Google session expired. Please sign in again.");
+        setAuthStep("google");
+        return;
+      }
 
-      saveRescuerSession(session);
-      const targetId = rescuerId.trim() || "demo-team-alpha";
-      router.push(`/rescuer/${encodeURIComponent(targetId)}`);
+      const res = await fetch("/api/auth/rescuer-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idToken,
+          rescuerId: rescuerId.trim(),
+          isTeamHead,
+          officeName,
+          officeLat,
+          officeLng,
+          regionRadiusKm: regionRadius,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || t.error);
+
+      router.push(data.redirect || `/rescuer/${encodeURIComponent(rescuerId.trim() || "demo-team-alpha")}`);
       router.refresh();
     } catch (err) {
       console.error("Rescuer setup failed:", err);
-      setError(t.error);
+      setError(err instanceof Error ? err.message : t.error);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <main className="public-home">
-      <PublicHeader />
+    <main className="public-home theme-light">
+      <BackButton />
       <section className="access-form-layout">
-        <div>
-          <p className="hero-kicker">{t.kicker}</p>
-          <h1>{t.heading}</h1>
-          <p>{t.subheading}</p>
-        </div>
-
-        <div className="w-full max-w-lg bg-white/10 backdrop-blur-xl border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+        <div className="w-full bg-white border border-[#c8d1dc] border-t-[3px] border-t-[#c2410c] p-6 sm:p-8 shadow-[0_1px_2px_rgba(15,27,45,0.06),0_14px_30px_-12px_rgba(15,27,45,0.18)] space-y-5">
           {/* Header */}
-          <div className="text-center space-y-2">
-            <div className="inline-flex p-3 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/30">
-              <ShieldCheck size={32} />
+          <div className="space-y-3">
+            <div className="inline-flex items-center justify-center w-11 h-11 bg-[#115e59] text-white">
+              <ShieldCheck size={22} />
             </div>
-            <h2 className="text-2xl font-extrabold text-white">{t.title}</h2>
-            <p className="text-xs text-stone-300">
-              Google Authentication, Team Leadership Role & Regional Office Base Setup
-            </p>
+            <div className="pb-4 border-b border-[#dde3ea]">
+              <h2 className="text-xl font-bold text-[#0f1b2d]">{t.title}</h2>
+              <p className="text-xs text-[#64748b] mt-1">
+                Google authentication, team leadership role &amp; regional office base setup
+              </p>
+            </div>
           </div>
 
           {error && (
-            <div className="error-summary flex items-center gap-2 p-3 bg-red-500/20 border border-red-500/40 text-red-200 text-xs font-semibold rounded-xl">
+            <div className="error-summary flex items-center gap-2 p-3 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold">
               <AlertCircle size={15} />
               <span>{error}</span>
             </div>
@@ -214,42 +218,16 @@ export default function RescuerLoginPage() {
 
           {/* STEP 1: GOOGLE AUTHENTICATION */}
           {authStep === "google" && (
-            <form onSubmit={handleGoogleLoginSimulate} className="space-y-4">
-              <div className="p-4 bg-white/5 rounded-2xl border border-white/10 space-y-3">
-                <label className="block text-xs font-bold text-stone-300">
-                  {t.teamId}
-                  <input
-                    type="text"
-                    required
-                    value={rescuerId}
-                    onChange={(e) => setRescuerId(e.target.value)}
-                    placeholder="e.g. demo-team-alpha"
-                    className="mt-1 w-full p-2.5 bg-white/10 border border-white/20 rounded-xl text-xs font-semibold text-white focus:outline-hidden"
-                  />
-                </label>
-
-                <label className="block text-xs font-bold text-stone-300">Google Account Email</label>
-                <input
-                  type="email"
-                  required
-                  value={googleEmail}
-                  onChange={(e) => setGoogleEmail(e.target.value)}
-                  className="w-full p-2.5 bg-white/10 border border-white/20 rounded-xl text-xs font-semibold text-white focus:outline-hidden"
-                />
-
-                <label className="block text-xs font-bold text-stone-300">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={googleName}
-                  onChange={(e) => setGoogleName(e.target.value)}
-                  className="w-full p-2.5 bg-white/10 border border-white/20 rounded-xl text-xs font-semibold text-white focus:outline-hidden"
-                />
-              </div>
+            <div className="space-y-4">
+              <p className="text-xs text-[#64748b] leading-relaxed">
+                Sign in with your official Google account to continue to team &amp; base setup.
+              </p>
 
               <button
-                type="submit"
-                className="w-full py-3.5 bg-white text-stone-900 font-extrabold text-xs rounded-xl shadow-lg hover:bg-stone-100 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={googleLoading}
+                className="w-full py-3 bg-white border border-[#c8d1dc] text-[#0f1b2d] font-extrabold text-xs hover:bg-[#eef2f6] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
                   <path
@@ -269,107 +247,125 @@ export default function RescuerLoginPage() {
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                   />
                 </svg>
-                Sign in with Google OAuth →
+                {googleLoading ? "Opening Google…" : "Sign in with Google"}
               </button>
-            </form>
+            </div>
           )}
 
-          {/* STEP 2: TEAM HEAD ROLE & OFFICE LOCATION SETUP */}
+          {/* STEP 2: TEAM ROLE & BASE SETUP */}
           {authStep === "profile" && (
-            <form onSubmit={handleCompleteSetup} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-stone-200 block flex items-center gap-1.5">
-                  <Award size={14} className="text-purple-400" /> Team Leadership Designation
-                </label>
-                
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsTeamHead(true)}
-                    className={`p-3 rounded-xl border text-left text-xs transition-all ${
-                      isTeamHead
-                        ? "bg-purple-600/30 border-purple-400 text-white font-bold ring-1 ring-purple-400"
-                        : "bg-white/5 border-white/10 text-stone-400 hover:bg-white/10"
-                    }`}
-                  >
-                    <span className="block font-extrabold text-sm text-purple-300">👑 Team Head / Commander</span>
-                    <span className="text-[11px] opacity-80 block mt-0.5">Can set & broadcast resource estimations</span>
-                  </button>
+            <form onSubmit={handleCompleteSetup} className="space-y-5">
+              {/* signed-in identity */}
+              <div className="flex items-center gap-3 pb-4 border-b border-[#dde3ea]">
+                {photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={photoUrl} alt="" className="w-9 h-9 rounded-full" />
+                ) : (
+                  <span className="grid place-items-center w-9 h-9 rounded-full bg-[#115e59] text-white text-sm font-bold">
+                    {(googleName || googleEmail || "?").charAt(0).toUpperCase()}
+                  </span>
+                )}
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-[#0f1b2d] truncate">{googleName || "Signed in"}</span>
+                  <span className="block text-xs text-[#64748b] truncate">{googleEmail}</span>
+                </span>
+              </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setIsTeamHead(false)}
-                    className={`p-3 rounded-xl border text-left text-xs transition-all ${
-                      !isTeamHead
-                        ? "bg-emerald-600/30 border-emerald-400 text-white font-bold ring-1 ring-emerald-400"
-                        : "bg-white/5 border-white/10 text-stone-400 hover:bg-white/10"
-                    }`}
-                  >
-                    <span className="block font-extrabold text-sm text-emerald-300">🛡️ Field Rescuer</span>
-                    <span className="text-[11px] opacity-80 block mt-0.5">Executes operations following team head plan</span>
-                  </button>
+              {/* role */}
+              <div className="space-y-2">
+                <span className="block text-xs font-bold text-[#475569]">Team leadership designation</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { head: true, Icon: Crown, label: "Team Head", desc: "Sets and broadcasts resource estimates" },
+                    { head: false, Icon: HardHat, label: "Field Rescuer", desc: "Executes the team head's plan" },
+                  ] as const).map(({ head, Icon, label, desc }) => {
+                    const selected = isTeamHead === head;
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => setIsTeamHead(head)}
+                        className={`flex flex-col gap-1.5 p-3 border text-left transition-colors ${
+                          selected
+                            ? "border-[#115e59] bg-[#115e59]/5"
+                            : "border-[#dde3ea] hover:border-[#c8d1dc]"
+                        }`}
+                      >
+                        <Icon size={18} className={selected ? "text-[#115e59]" : "text-[#94a3b8]"} />
+                        <span className={`text-sm font-bold ${selected ? "text-[#0f1b2d]" : "text-[#475569]"}`}>
+                          {label}
+                        </span>
+                        <span className="text-[11px] leading-snug text-[#64748b]">{desc}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Office Location & Jurisdiction Radius */}
-              <div className="p-4 bg-white/5 rounded-2xl border border-white/10 space-y-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <label className="text-xs font-bold text-stone-200 flex items-center gap-1.5">
-                    <MapPin size={14} className="text-emerald-400" /> Office / Base Location
+              {/* office / base location */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label htmlFor="office-name" className="text-xs font-bold text-[#475569]">
+                    Office / base location
                   </label>
                   <button
                     type="button"
                     onClick={handleDetectOfficeGPS}
                     disabled={gpsLoading}
-                    className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 hover:bg-emerald-500/30 text-[11px] font-bold rounded-lg flex items-center gap-1 cursor-pointer"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#115e59] hover:text-[#0d4b47] disabled:opacity-60 cursor-pointer"
                   >
-                    <Navigation size={11} className={gpsLoading ? "animate-spin" : ""} />
-                    {gpsLoading ? "Detecting..." : "Select Office Location"}
+                    <Navigation size={12} className={gpsLoading ? "animate-spin" : ""} />
+                    {gpsLoading ? "Detecting…" : "Use current location"}
                   </button>
                 </div>
-
                 <input
+                  id="office-name"
                   type="text"
                   required
                   value={officeName}
                   onChange={(e) => setOfficeName(e.target.value)}
-                  placeholder="Office Base Landmark / Address"
-                  className="w-full p-2.5 bg-white/10 border border-white/20 rounded-xl text-xs font-semibold text-white focus:outline-hidden"
+                  placeholder="Landmark or address"
+                  className="w-full p-2.5 bg-white border border-[#cbd5e1] text-xs font-semibold text-[#0f1b2d] focus:border-[#c2410c] focus:outline-hidden"
                 />
-
-                <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-stone-400">
-                  <span>Lat: <b>{officeLat.toFixed(4)}</b></span>
-                  <span>Lng: <b>{officeLng.toFixed(4)}</b></span>
-                </div>
-
-                <div className="pt-1">
-                  <label className="text-xs font-bold text-stone-300 block mb-1">
-                    Jurisdiction Radius (Regional Separation): <b>{regionRadius} km</b>
-                  </label>
-                  <input
-                    type="range"
-                    min="5"
-                    max="100"
-                    step="5"
-                    value={regionRadius}
-                    onChange={(e) => setRegionRadius(parseInt(e.target.value) || 25)}
-                    className="w-full accent-emerald-500 cursor-pointer"
-                  />
-                </div>
+                <p className="text-[11px] font-mono text-[#94a3b8]">
+                  {officeLat.toFixed(4)}, {officeLng.toFixed(4)}
+                </p>
               </div>
 
-              <div className="pt-2 flex items-center gap-2">
+              {/* jurisdiction radius */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="radius" className="text-xs font-bold text-[#475569]">
+                    Jurisdiction radius
+                  </label>
+                  <span className="text-xs font-bold text-[#115e59]">{regionRadius} km</span>
+                </div>
+                <input
+                  id="radius"
+                  type="range"
+                  min="5"
+                  max="100"
+                  step="5"
+                  value={regionRadius}
+                  onChange={(e) => setRegionRadius(parseInt(e.target.value) || 25)}
+                  className="w-full accent-[#115e59] cursor-pointer"
+                />
+              </div>
+
+              {/* actions */}
+              <div className="flex items-center gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setAuthStep("google")}
-                  className="w-1/3 py-3 bg-white/10 text-stone-300 font-bold text-xs rounded-xl hover:bg-white/20"
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-3 bg-white border border-[#c8d1dc] text-[#475569] font-bold text-xs hover:bg-[#eef2f6] transition-colors cursor-pointer"
                 >
-                  ← Back
+                  <ArrowLeft size={14} /> Back
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-2/3 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-xs rounded-xl shadow-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 py-3 bg-[#c2410c] hover:bg-[#9a3412] text-white font-extrabold text-xs transition-colors disabled:opacity-60 cursor-pointer"
                 >
                   {loading ? t.loading : t.submit} <ArrowRight size={14} />
                 </button>

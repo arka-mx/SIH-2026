@@ -10,6 +10,8 @@
     "db:seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
+    "firebase": "^12.18.0",
+    "jose": "^6.2.10",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.34.0",
     "mongoose": "^9.9.4",

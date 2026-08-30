@@ -271,6 +271,39 @@ export async function apiReverseGeocodeDetailed(lat: number, lng: number): Promi
   };
 }
 
+export interface GeocodeResult {
+  label: string;
+  lat: number;
+  lng: number;
+}
+
+/** Forward geocode a free-text place name (e.g. "Brahmapur, Odisha"). */
+export async function apiForwardGeocode(query: string): Promise<GeocodeResult[]> {
+  const q = query.trim();
+  if (!q) return [];
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&q=${encodeURIComponent(q)}`,
+      { headers: { "Accept-Language": "en-US,en;q=0.9" } }
+    );
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        return data
+          .filter((d) => d && d.display_name && d.lat && d.lon)
+          .map((d) => ({
+            label: d.display_name as string,
+            lat: parseFloat(d.lat),
+            lng: parseFloat(d.lon),
+          }));
+      }
+    }
+  } catch (err) {
+    console.warn("Forward geocode fetch error:", err);
+  }
+  return [];
+}
+
 export function calcDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // Earth radius km
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
