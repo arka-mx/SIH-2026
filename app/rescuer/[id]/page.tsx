@@ -1,7 +1,6 @@
 "use client";
 
 import { use, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { RescueHeadResourceEstimator } from "@/components/rescuer/RescueHeadResourceEstimator";
 import { TeamHeadVolunteerPool } from "@/components/rescuer/TeamHeadVolunteerPool";
 import { RescuerShell } from "@/components/rescuer/RescuerShell";
@@ -14,7 +13,7 @@ import { MemberFieldPortal } from "@/components/rescuer/MemberFieldPortal";
 import { apiGetAllIncidents, apiGetIncidentsForOfficeRegion, ReportItem } from "@/lib/api";
 import { fetchRescuerSession, RescuerUserSession } from "@/lib/rescuerAuth";
 import { RescuerSupply, RescuerUnitProfile } from "@/types/rescuer";
-import { RotateCw, MapPin, LogIn, Radio, Eye, PackagePlus } from "lucide-react";
+import { MapPin, Radio, Eye, PackagePlus } from "lucide-react";
 
 // Mock Rescuer Database mapping
 const INITIAL_RESCUER_PROFILES: Record<string, RescuerUnitProfile> = {
@@ -193,15 +192,6 @@ export default function RescuerDetailPage({
     setProfile(INITIAL_RESCUER_PROFILES[rescuerId] || INITIAL_RESCUER_PROFILES["demo-team-alpha"]);
   }, [rescuerId]);
 
-  function handleRoleToggle(head: boolean) {
-    setIsTeamHead(head);
-    if (head) {
-      setActiveTab("overview");
-    } else {
-      setActiveTab("member-portal");
-    }
-  }
-
   function handleStatusChange(newStatus: "available" | "en_route" | "at_scene") {
     setProfile((prev) => ({ ...prev, status: newStatus }));
   }
@@ -235,7 +225,6 @@ export default function RescuerDetailPage({
       isTeamHead={isTeamHead}
       activeTab={activeTab}
       onTabChange={setActiveTab}
-      onToggleRole={handleRoleToggle}
     >
       {/* ── Top Header Strip ── */}
       <div className="adm-card">
@@ -259,22 +248,6 @@ export default function RescuerDetailPage({
                 <MapPin size={12} /> {officeLat.toFixed(4)}, {officeLng.toFixed(4)}
               </span>
             </p>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => handleRoleToggle(!isTeamHead)}
-              className="adm-btn"
-            >
-              {isTeamHead ? "Member view" : "Head view"}
-            </button>
-            <Link href="/rescuer/login" className="adm-btn">
-              <LogIn size={14} /> Office login
-            </Link>
-            <button onClick={loadData} className="adm-btn">
-              <RotateCw size={14} /> Refresh
-            </button>
           </div>
         </div>
       </div>

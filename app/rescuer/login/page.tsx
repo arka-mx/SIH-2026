@@ -17,69 +17,9 @@ import { BackButton } from "@/components/public/BackButton";
 import { apiReverseGeocode } from "@/lib/api";
 import { auth, googleProvider } from "@/lib/firebase";
 
-const TRANSLATIONS = {
-  English: {
-    kicker: "Field operations portal",
-    heading: "Active Rescuer Dispatch.",
-    subheading: "Access your unit tracking dashboard, supplies list, and automated emergency routing.",
-    title: "Rescuer Access Portal",
-    teamId: "Rescuer Unit ID / Callsign",
-    password: "Password",
-    submit: "Enter Field Portal",
-    loading: "Verifying...",
-    error: "Invalid rescuer credentials"
-  },
-  Hindi: {
-    kicker: "क्षेत्र संचालन पोर्टल",
-    heading: "सक्रिय बचाव दल प्रेषण।",
-    subheading: "अपने इकाई ट्रैकिंग डैशबोर्ड, आपूर्ति सूची और स्वचालित आपातकालीन रूटिंग तक पहुंचें।",
-    title: "बचावकर्ता प्रवेश पोर्टल",
-    teamId: "बचाव दल आईडी / कॉलसाइन",
-    password: "पासवर्ड",
-    submit: "फील्ड पोर्टल में प्रवेश करें",
-    loading: "सत्यापित किया जा रहा है...",
-    error: "अमान्य बचावकर्ता क्रेडेंशियल"
-  },
-  Bengali: {
-    kicker: "ফিল্ড অপারেশন পোর্টাল",
-    heading: "সক্রিয় উদ্ধারকারী প্রেরণ।",
-    subheading: "আপনার ইউনিট ট্র্যাকিং ড্যাশবোর্ড, সরবরাহ তালিকা এবং স্বয়ংক্রিয় জরুরি রুট অ্যাক্সেস করুন।",
-    title: "উদ্ধারকারী অ্যাক্সেস পোর্টাল",
-    teamId: "উদ্ধারকারী ইউনিট আইডি / কলসাইন",
-    password: "পাসওয়ার্ড",
-    submit: "ফিল্ড পোর্টালে প্রবেশ করুন",
-    loading: "যাচাই করা হচ্ছে...",
-    error: "অকার্যকর উদ্ধারকারী শংসাপত্র"
-  },
-  Odia: {
-    kicker: "ଫିଲ୍ଡ କାର୍ଯ୍ୟକ୍ଷେତ୍ର ପୋର୍ଟାଲ",
-    heading: "ସକ୍ରିୟ ଉଦ୍ଧାରକାରୀ ପ୍ରେରଣ।",
-    subheading: "ଆପଣଙ୍କର ୟୁନିଟ୍ ଟ୍ରାକିଂ ଡ୍ୟାସବୋର୍ଡ, ସାମଗ୍ରୀ ତାଲିକା ଏବଂ ସ୍ୱୟଂକ୍ରିୟ ଜରୁରୀକାଳୀନ ରୁଟିଂ ପ୍ରବେଶ କରନ୍ତୁ।",
-    title: "ଉଦ୍ଧାରକାରୀ ପ୍ରବେଶ ପୋର୍ଟାଲ",
-    teamId: "ଉଦ୍ଧାରକାରୀ ୟୁନିଟ୍ ଆଇଡି / କଲ୍ ସାଇନ୍",
-    password: "ପାସୱାର୍ଡ",
-    submit: "ଫିଲ୍ଡ ପୋର୍ଟାଲରେ ପ୍ରବେଶ କରନ୍ତୁ",
-    loading: "ଯାଞ୍ଚ କରାଯାଉଛି...",
-    error: "ଅବୈଧ ଉଦ୍ଧାରକାରୀ ପ୍ରମାଣପତ୍ର"
-  },
-  Telugu: {
-    kicker: "ఫీల్డ్ కార్యకలాపాల పోర్టల్",
-    heading: "సక్రియ రెస్క్యూయర్ పంపడం.",
-    subheading: "మీ యూనిట్ ట్రాకింగ్ డ్యాష్‌బోర్డ్, సామాగ్రి జాబితా మరియు స్వయంచాలక అత్యవసర రూటింగ్‌ను యాక్సెస్ చేయండి.",
-    title: "రెస్క్యూయర్ యాక్సెస్ పోర్టల్",
-    teamId: "రెస్క్యూయర్ యూనిట్ ఐడి / కాల్‌సైన్",
-    password: "పాసవర్డ్",
-    submit: "ఫీల్డ్ పోర్టల్‌లోకి ప్రవేశించండి",
-    loading: "ధృవీకరిస్తోంది...",
-    error: "చెల్లని రెస్క్యూయర్ ఆధారాలు"
-  }
-};
-
-type SupportedLang = "English" | "Hindi" | "Bengali" | "Odia" | "Telugu";
-
 export default function RescuerLoginPage() {
   const router = useRouter();
-  const { name: lang } = useLanguage();
+  const { t } = useLanguage();
 
   // Google identity (populated by Firebase sign-in)
   const [googleEmail, setGoogleEmail] = useState("");
@@ -102,7 +42,6 @@ export default function RescuerLoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const t = TRANSLATIONS[lang as SupportedLang] || TRANSLATIONS.English;
 
   async function handleDetectOfficeGPS() {
     if (!navigator.geolocation) return;
@@ -179,13 +118,13 @@ export default function RescuerLoginPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || t.error);
+      if (!res.ok) throw new Error(data.error || t("error", "Invalid rescuer credentials"));
 
       router.push(data.redirect || `/rescuer/${encodeURIComponent(rescuerId.trim() || "demo-team-alpha")}`);
       router.refresh();
     } catch (err) {
       console.error("Rescuer setup failed:", err);
-      setError(err instanceof Error ? err.message : t.error);
+      setError(err instanceof Error ? err.message : t("error", "Invalid rescuer credentials"));
     } finally {
       setLoading(false);
     }
@@ -202,7 +141,7 @@ export default function RescuerLoginPage() {
               <ShieldCheck size={22} />
             </div>
             <div className="pb-4 border-b border-[#dde3ea]">
-              <h2 className="text-xl font-bold text-[#0f1b2d]">{t.title}</h2>
+              <h2 className="text-xl font-bold text-[#0f1b2d]">{t("title", "Rescuer Access Portal")}</h2>
               <p className="text-xs text-[#64748b] mt-1">
                 Google authentication, team leadership role &amp; regional office base setup
               </p>
@@ -367,7 +306,7 @@ export default function RescuerLoginPage() {
                   disabled={loading}
                   className="flex-1 inline-flex items-center justify-center gap-1.5 py-3 bg-[#c2410c] hover:bg-[#9a3412] text-white font-extrabold text-xs transition-colors disabled:opacity-60 cursor-pointer"
                 >
-                  {loading ? t.loading : t.submit} <ArrowRight size={14} />
+                  {loading ? t("loading", "Verifying...") : t("submit", "Enter Field Portal")} <ArrowRight size={14} />
                 </button>
               </div>
             </form>

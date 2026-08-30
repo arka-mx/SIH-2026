@@ -12,7 +12,6 @@ interface RescuerShellProps {
   isTeamHead?: boolean;
   activeTab?: string;
   onTabChange?: (tab: string) => void;
-  onToggleRole?: (head: boolean) => void;
 }
 
 export function RescuerShell({
@@ -23,7 +22,6 @@ export function RescuerShell({
   isTeamHead = true,
   activeTab = "overview",
   onTabChange,
-  onToggleRole,
 }: RescuerShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -43,7 +41,6 @@ export function RescuerShell({
           isTeamHead={isTeamHead}
           activeTab={activeTab}
           onTabChange={onTabChange}
-          onToggleRole={onToggleRole}
           mobileOpen={mobileOpen}
           onCloseMobile={() => setMobileOpen(false)}
         />

@@ -9,6 +9,7 @@ import {
   UsersRound,
   HardHat,
   Package,
+  Crown,
   X,
 } from "lucide-react";
 
@@ -17,7 +18,6 @@ interface RescuerNavigationProps {
   isTeamHead: boolean;
   activeTab: string;
   onTabChange?: (tab: string) => void;
-  onToggleRole?: (head: boolean) => void;
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
 }
@@ -36,40 +36,10 @@ const MEMBER_ITEMS = [
   { id: "member-supplies", label: "Supplies", icon: Package },
 ];
 
-function RoleSwitch({
-  isTeamHead,
-  onToggleRole,
-}: {
-  isTeamHead: boolean;
-  onToggleRole?: (head: boolean) => void;
-}) {
-  return (
-    <div className="adm-segment w-full">
-      <button
-        type="button"
-        data-active={isTeamHead}
-        onClick={() => onToggleRole?.(true)}
-        className="flex-1"
-      >
-        Head
-      </button>
-      <button
-        type="button"
-        data-active={!isTeamHead}
-        onClick={() => onToggleRole?.(false)}
-        className="flex-1"
-      >
-        Member
-      </button>
-    </div>
-  );
-}
-
 export function RescuerNavigation({
   isTeamHead,
   activeTab,
   onTabChange,
-  onToggleRole,
   mobileOpen = false,
   onCloseMobile,
 }: RescuerNavigationProps) {
@@ -102,9 +72,21 @@ export function RescuerNavigation({
   return (
     <>
       <aside className="sidebar">
-        <div className="mb-3">
-          <span className="eyebrow block mb-2">Role</span>
-          <RoleSwitch isTeamHead={isTeamHead} onToggleRole={onToggleRole} />
+        <div className="mb-3 p-2.5 bg-slate-50 border border-slate-200 text-xs">
+          <span className="eyebrow block mb-1">Designation</span>
+          <div className="flex items-center gap-1.5 font-bold text-slate-900">
+            {isTeamHead ? (
+              <>
+                <Crown size={14} className="text-amber-600" />
+                <span>Team Head</span>
+              </>
+            ) : (
+              <>
+                <HardHat size={14} className="text-[#115e59]" />
+                <span>Field Member</span>
+              </>
+            )}
+          </div>
         </div>
         {links()}
       </aside>
@@ -130,15 +112,11 @@ export function RescuerNavigation({
               <X size={18} />
             </button>
           </div>
-          <div className="p-3 mb-1">
-            <span className="eyebrow block mb-2">Role</span>
-            <RoleSwitch
-              isTeamHead={isTeamHead}
-              onToggleRole={(head) => {
-                onToggleRole?.(head);
-                onCloseMobile?.();
-              }}
-            />
+          <div className="p-3 mb-1 bg-slate-50 border-b border-slate-200">
+            <span className="eyebrow block mb-1">Designation</span>
+            <span className="text-xs font-bold text-slate-900">
+              {isTeamHead ? "Team Head" : "Field Member"}
+            </span>
           </div>
           {links(onCloseMobile)}
         </nav>

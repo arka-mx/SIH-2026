@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { GlobalLanguageSwitcher } from "@/components/ui/GlobalLanguageSwitcher";
+import { TranslationProvider } from "@/components/ui/TranslationProvider";
 
 export const metadata: Metadata = {
   title: "Momentum | Disaster Response Command Center",
@@ -11,6 +12,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
+        <TranslationProvider />
         <GlobalLanguageSwitcher />
         {children}
       </body>

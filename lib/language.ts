@@ -1,18 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-
-/**
- * Single source of truth for the app's language preference.
- *
- * The chosen language is persisted in localStorage under `momentum_language`
- * as the canonical English NAME ("English", "Hindi", …). Legacy ISO codes
- * ("en", "hi", …) are still accepted on read for backwards compatibility.
- *
- * Any component can call `useLanguage()` to read the current value and stay in
- * sync — changes made on one screen propagate live to every mounted consumer
- * (same tab, via a custom event) and across tabs (via the `storage` event).
- */
+import i18n from "./i18n";
 
 export const LANGUAGES = [
   { code: "en", name: "English", native: "English" },
@@ -37,7 +26,6 @@ const CODE_BY_NAME = Object.fromEntries(
   LANGUAGES.map((l) => [l.name, l.code])
 ) as Record<LanguageName, LanguageCode>;
 
-/** Accepts a name ("Hindi") or a legacy code ("hi") and returns the canonical name. */
 export function normalizeToName(value: string | null | undefined): LanguageName | null {
   if (!value) return null;
   if (value in CODE_BY_NAME) return value as LanguageName;
@@ -58,39 +46,64 @@ export function getStoredLanguageName(): LanguageName {
   }
 }
 
-/** Persist the preference and notify every listener in this tab + other tabs. */
+/** Synchronizes i18next package and DOM translation cookie */
+function syncEngineLanguage(name: LanguageName) {
+  const code = nameToCode(name);
+  if (i18n.language !== code) {
+    i18n.changeLanguage(code);
+  }
+
+  if (typeof window !== "undefined") {
+    const langTarget = code === "or" ? "or" : code;
+    // Set cookie for browser translation element
+    document.cookie = `googtrans=/en/${langTarget}; path=/; domain=${window.location.hostname}`;
+    document.cookie = `googtrans=/en/${langTarget}; path=/`;
+
+    // Dispatch DOM event for translation triggers
+    window.dispatchEvent(new CustomEvent("i18n:language-changed", { detail: { name, code } }));
+  }
+}
+
 export function setStoredLanguage(value: string) {
   const name = normalizeToName(value) ?? DEFAULT_NAME;
   try {
     window.localStorage.setItem(STORAGE_KEY, name);
   } catch {
-    /* storage unavailable — still fire the event so the live UI updates */
+    /* storage fallback */
   }
+  syncEngineLanguage(name);
   window.dispatchEvent(new CustomEvent<LanguageName>(CHANGE_EVENT, { detail: name }));
 }
 
 export interface UseLanguage {
-  /** Canonical English name, e.g. "Hindi". */
   name: LanguageName;
-  /** ISO code, e.g. "hi". */
   code: LanguageCode;
-  /** One of the LANGUAGES entries. */
   language: (typeof LANGUAGES)[number];
-  /** Update the preference everywhere. Accepts a name or a code. */
   setLanguage: (value: string) => void;
+  t: (key: string, fallback?: string) => string;
 }
 
 export function useLanguage(): UseLanguage {
   const [name, setName] = useState<LanguageName>(DEFAULT_NAME);
 
   useEffect(() => {
-    setName(getStoredLanguageName());
+    const currentName = getStoredLanguageName();
+    setName(currentName);
+    syncEngineLanguage(currentName);
 
-    const sync = () => setName(getStoredLanguageName());
+    const sync = () => {
+      const updated = getStoredLanguageName();
+      setName(updated);
+      syncEngineLanguage(updated);
+    };
+
     const onCustom = (e: Event) => {
       const detail = (e as CustomEvent<LanguageName>).detail;
-      setName(detail ?? getStoredLanguageName());
+      const updated = detail ?? getStoredLanguageName();
+      setName(updated);
+      syncEngineLanguage(updated);
     };
+
     const onStorage = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY) sync();
     };
@@ -105,10 +118,18 @@ export function useLanguage(): UseLanguage {
 
   const setLanguage = useCallback((value: string) => setStoredLanguage(value), []);
 
+  const t = useCallback(
+    (key: string, fallback?: string) => {
+      return i18n.t(key, { defaultValue: fallback || key });
+    },
+    [name]
+  );
+
   return {
     name,
     code: nameToCode(name),
     language: LANGUAGES.find((l) => l.name === name) ?? LANGUAGES[0],
     setLanguage,
+    t,
   };
 }
