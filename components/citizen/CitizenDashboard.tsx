@@ -455,16 +455,43 @@ export function CitizenDashboard() {
                 Pledged by <strong>{activePledge.volunteerName}</strong> ({activePledge.contactPhone}) at {activePledge.locationName}.
               </p>
             </div>
-            <span className="adm-status adm-status--green text-xs font-bold">
-              {activePledge.status === "assigned_by_admin"
-                ? "Assigned to Rescue Team Head"
-                : "Awaiting Command Match"}
+            <span
+              className={`adm-status text-xs font-bold ${
+                activePledge.status === "mobilized"
+                  ? "adm-status--green"
+                  : activePledge.status === "approved_by_head"
+                  ? "adm-status--blue"
+                  : activePledge.status === "assigned_by_admin"
+                  ? "adm-status--amber"
+                  : "adm-status--mute"
+              }`}
+            >
+              {activePledge.status === "mobilized"
+                ? "⚡ Mobilized to Scene"
+                : activePledge.status === "approved_by_head"
+                ? "✓ Approved by Rescue Team Head"
+                : activePledge.status === "assigned_by_admin"
+                ? "👑 Assigned to Rescue Team Head"
+                : "⏳ Awaiting Command Match"}
             </span>
           </div>
 
+          {/* Assigned Rescue Team Banner */}
+          {activePledge.assignedTeamName && (
+            <div className="p-3 bg-purple-100 border border-purple-300 rounded text-xs text-purple-950 font-medium">
+              <span className="font-bold flex items-center gap-1.5 text-purple-900 mb-0.5">
+                <Crown size={14} className="text-amber-600" /> Assigned Rescue Team Base:
+              </span>
+              <p className="font-bold text-sm text-purple-950">{activePledge.assignedTeamName}</p>
+              <p className="text-[11px] text-purple-800 mt-1">
+                The Rescue Team Head has received your pledge &amp; direct phone ({activePledge.contactPhone}) for local deployment.
+              </p>
+            </div>
+          )}
+
           <div className="flex items-center justify-between pt-2 border-t border-emerald-200">
             <span className="text-[11px] text-emerald-800">
-              Need to cancel your pledge before confirmation?
+              Need to cancel your pledge before mobilization?
             </span>
             <button
               type="button"

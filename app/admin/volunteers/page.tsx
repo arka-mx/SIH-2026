@@ -20,6 +20,7 @@ import {
   Crown,
   CheckCircle2,
 } from "lucide-react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 
 export default function VolunteersPage() {
@@ -85,31 +86,46 @@ export default function VolunteersPage() {
     }
   }
 
+  const pendingPledges = pledges.filter(
+    (p) => p.status !== "assigned_by_admin" && p.status !== "approved_by_head" && p.status !== "mobilized"
+  );
+  const assignedCount = pledges.length - pendingPledges.length;
+
   return (
     <AdminShell>
       <div className="page-heading">
-        <h1>Volunteer & Resource Pledges</h1>
+        <h1>Volunteer &amp; Resource Pledges</h1>
         <div className="flex items-center gap-3">
-          <span className="login-note">{pledges.length} total pledges</span>
+          <span className="login-note">{pendingPledges.length} pending admin assignment</span>
           <button onClick={loadData} className="adm-btn">
             <RotateCw size={13} /> Refresh
           </button>
         </div>
       </div>
 
-      <div className="p-4 bg-purple-900 text-white border border-purple-800 space-y-2 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-purple-500/20 text-purple-300 border border-purple-500/30">
-            <Sparkles size={20} className="text-purple-300" />
+      <div className="p-4 bg-purple-900 text-white border border-purple-800 space-y-2 mb-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              <Sparkles size={20} className="text-purple-300" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">
+                Centralized Volunteer Dispatch &amp; Proximity Assignment
+              </h3>
+              <p className="text-xs text-purple-200 mt-0.5">
+                Citizen pledges arrive directly at the District Command Center. Admin assigns each volunteer/equipment pledge to the <strong>closest regional Rescue Team Head</strong> based on geographical proximity.
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-sm font-bold text-white">
-              Centralized Volunteer Dispatch & Proximity Assignment
-            </h3>
-            <p className="text-xs text-purple-200 mt-0.5">
-              Citizen pledges arrive directly at the District Command Center. Admin assigns each volunteer/equipment pledge to the <strong>closest regional Rescue Team Head</strong> based on geographical proximity.
-            </p>
-          </div>
+          {assignedCount > 0 && (
+            <Link
+              href="/admin/verified?tab=pledges"
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-xs font-bold shrink-0"
+            >
+              View {assignedCount} Verified &amp; Assigned Pledges →
+            </Link>
+          )}
         </div>
       </div>
 
@@ -120,17 +136,23 @@ export default function VolunteersPage() {
         </div>
       )}
 
-      {loading && pledges.length === 0 ? (
+      {loading && pendingPledges.length === 0 ? (
         <div className="empty-state">
           <p>Loading volunteer pledges…</p>
         </div>
-      ) : pledges.length === 0 ? (
-        <div className="empty-state">
-          <p>No volunteer pledges registered yet.</p>
+      ) : pendingPledges.length === 0 ? (
+        <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-300 space-y-2">
+          <p className="font-bold text-slate-800 text-sm">No unassigned volunteer pledges remaining.</p>
+          <p className="text-xs text-slate-500">
+            All submitted community pledges have been assigned to regional Rescue Team Heads.
+          </p>
+          <Link href="/admin/verified?tab=pledges" className="adm-btn adm-btn--primary inline-flex mt-2">
+            View Verified &amp; Assigned Pledges →
+          </Link>
         </div>
       ) : (
         <div className="space-y-4">
-          {pledges.map((pledge) => {
+          {pendingPledges.map((pledge) => {
             const isAssigned = pledge.status === "assigned_by_admin" || pledge.status === "approved_by_head";
 
             // Sort Rescue Team Heads by closest distance to this pledge's location

@@ -141,24 +141,31 @@ export function TeamHeadVolunteerPool({
                     </span>
                   </div>
 
-                  <div className="mt-3 p-2.5 bg-white/5 rounded-xl space-y-1 text-xs font-mono">
+                  <div className="mt-3 p-2.5 bg-white/5 rounded-xl space-y-1.5 text-xs font-mono">
                     <div className="flex justify-between text-stone-200">
-                      <span className="text-stone-400">Pledged Asset:</span>
+                      <span className="text-stone-400">Pledged Asset / Skill:</span>
                       <strong className="text-emerald-400 font-bold">{vol.assetType}</strong>
                     </div>
                     <div className="flex justify-between text-stone-200">
-                      <span className="text-stone-400">Capacity:</span>
+                      <span className="text-stone-400">Capacity / Load:</span>
                       <strong>{vol.capacity}</strong>
                     </div>
                     <div className="flex justify-between text-stone-200">
                       <span className="text-stone-400">Availability:</span>
                       <strong className="text-purple-300">{vol.availability}</strong>
                     </div>
-                    <div className="flex justify-between text-stone-200 pt-1 border-t border-white/10">
-                      <span className="text-stone-400">Contact:</span>
-                      <span className="text-amber-300 font-bold flex items-center gap-1">
-                        <Phone size={11} /> {vol.contactPhone}
-                      </span>
+                    <div className="flex justify-between text-stone-200">
+                      <span className="text-stone-400">Base Location:</span>
+                      <strong className="text-stone-200">{vol.locationName}</strong>
+                    </div>
+                    <div className="flex justify-between items-center text-stone-200 pt-1.5 border-t border-white/10">
+                      <span className="text-stone-400">Direct Phone Contact:</span>
+                      <a
+                        href={`tel:${vol.contactPhone}`}
+                        className="text-amber-300 font-bold hover:underline flex items-center gap-1 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/30"
+                      >
+                        <Phone size={12} /> {vol.contactPhone}
+                      </a>
                     </div>
                   </div>
                 </div>

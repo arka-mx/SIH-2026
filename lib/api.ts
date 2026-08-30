@@ -1559,6 +1559,7 @@ export async function apiAssignVolunteerPledgeToTeam(
   pledgeId: string,
   teamId: string
 ): Promise<{ pledge: VolunteerPledge; message: string }> {
+  inMemoryVolunteerPledges = loadFromStorage("volunteer_pledges", inMemoryVolunteerPledges);
   const head = inMemoryTeamHeadContacts[teamId];
   const targetName = head ? `${head.headName} (${head.headOffice})` : teamId;
 
@@ -1573,6 +1574,8 @@ export async function apiAssignVolunteerPledgeToTeam(
     }
     return v;
   });
+
+  saveToStorage("volunteer_pledges", inMemoryVolunteerPledges);
 
   const updated = inMemoryVolunteerPledges.find((v) => v.id === pledgeId);
   if (!updated) throw new Error("Pledge not found");
@@ -1597,9 +1600,11 @@ export async function apiUpdateVolunteerPledgeStatus(
   pledgeId: string,
   status: "approved_by_head" | "mobilized"
 ): Promise<VolunteerPledge> {
+  inMemoryVolunteerPledges = loadFromStorage("volunteer_pledges", inMemoryVolunteerPledges);
   inMemoryVolunteerPledges = inMemoryVolunteerPledges.map((v) =>
     v.id === pledgeId ? { ...v, status } : v
   );
+  saveToStorage("volunteer_pledges", inMemoryVolunteerPledges);
   const updated = inMemoryVolunteerPledges.find((v) => v.id === pledgeId);
   if (!updated) throw new Error("Volunteer pledge not found");
   return updated;
