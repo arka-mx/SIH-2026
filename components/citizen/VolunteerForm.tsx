@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { Send, UsersRound, CheckCircle2, MapPin, Sparkles, Navigation, Award, ShieldCheck } from "lucide-react";
+import { Send, CheckCircle2, MapPin, Navigation } from "lucide-react";
 import { apiReverseGeocodeDetailed, apiSubmitVolunteerRequest } from "@/lib/api";
 import Link from "next/link";
 
@@ -98,164 +98,131 @@ export function VolunteerForm() {
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Community Resource Pool (Differentiator)</p>
-          <h1>Pledge Support or Equipment</h1>
+          <p className="eyebrow">Community resource pool</p>
+          <h1>Pledge</h1>
         </div>
-        <span className="login-note flex items-center gap-1">
-          <Sparkles size={14} className="text-emerald-600" /> Citizen-Pledged Help
-        </span>
       </div>
 
       {success && (
-        <div className="mb-6 p-4 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-950 text-xs shadow-sm flex items-start gap-3">
-          <CheckCircle2 size={20} className="text-emerald-600 mt-0.5 shrink-0" />
-          <div>
-            <h3 className="font-bold text-sm">Community Pledge Registered!</h3>
-            <p className="mt-1">
-              Your pledged asset ({service}) has been added to the response coordination pool. District authorities will be recommended this resource when nearby incidents are verified.
-            </p>
-            <Link href="/citizen/history" className="inline-block mt-2 font-semibold text-emerald-700 underline">
-              View in My Reports →
+        <div className="adm-note" style={{ borderLeftColor: "var(--c-green)", marginBottom: 16 }}>
+          <CheckCircle2 size={16} style={{ color: "var(--c-green)" }} />
+          <span>
+            Pledge registered. Your {service} is in the response pool and will be recommended to the
+            regional rescue lead for nearby incidents.{" "}
+            <Link href="/citizen/history" style={{ color: "var(--c-accent-ink)", fontWeight: 700 }}>
+              Track status →
             </Link>
-          </div>
+          </span>
         </div>
       )}
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 text-xs rounded-lg">
-          {error}
+        <div className="adm-note" style={{ borderLeftColor: "var(--c-red)", marginBottom: 16 }}>
+          <span>{error}</span>
         </div>
       )}
 
-      <form className="citizen-form clay-panel volunteer-form" onSubmit={handleSubmit}>
-        <div className="form-section-heading">
-          <div>
-            <p className="eyebrow">Offer Community Assets</p>
-            <h2 className="section-title">What can you contribute to the rescue effort?</h2>
-          </div>
-          <UsersRound size={22} className="text-emerald-600" />
+      <form className="adm-card" onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
+        <div style={{ paddingBottom: 14, borderBottom: "1px solid var(--c-hairline)" }}>
+          <p className="eyebrow">Offer assets</p>
+          <h2 className="section-title">What can you contribute?</h2>
         </div>
 
-        <div className="form-grid">
-          <label>
-            Your Name / Organization
-            <input 
-              name="name" 
-              required 
-              placeholder="e.g. Rahul Sharma / Local Fishermen Union" 
+        <div className="cz-form-grid">
+          <label className="adm-field">
+            <span>Name / organisation</span>
+            <input
+              name="name"
+              required
+              placeholder="Rahul Sharma / Local Fishermen Union"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </label>
 
-          <label>
-            Contact Phone / Radio
-            <input 
-              name="contact" 
-              placeholder="+91 98765 43210" 
+          <label className="adm-field">
+            <span>Contact</span>
+            <input
+              name="contact"
+              placeholder="+91 98765 43210"
               value={contact}
               onChange={(e) => setContact(e.target.value)}
             />
           </label>
 
-          <label>
-            Pledged Asset / Skill Type
+          <label className="adm-field">
+            <span>Asset / skill</span>
             <select name="service" value={service} onChange={(e) => setService(e.target.value)}>
-              <option value="boat">Inflatable Boat / Motorboat (Floods)</option>
-              <option value="4x4 Vehicle">4x4 Offroad Transport (Landslides / Evacuation)</option>
-              <option value="food_water">Spare Clean Water / Food Packets</option>
-              <option value="medical">Medical First Aid Kit & Paramedic Skill</option>
-              <option value="shelter">Private Hall / Community Shelter Space</option>
+              <option value="boat">Inflatable boat / motorboat</option>
+              <option value="4x4 Vehicle">4x4 transport</option>
+              <option value="food_water">Water / food packets</option>
+              <option value="medical">First aid kit &amp; paramedic skill</option>
+              <option value="shelter">Hall / shelter space</option>
             </select>
           </label>
 
-          <label>
-            Capacity (Persons / Units)
-            <input 
-              name="capacity" 
-              type="number" 
-              min="1" 
-              placeholder="e.g. 6 persons or 50 water bottles"
+          <label className="adm-field">
+            <span>Capacity</span>
+            <input
+              name="capacity"
+              type="number"
+              min="1"
+              placeholder="Persons or units"
               value={capacity}
               onChange={(e) => setCapacity(e.target.value)}
             />
           </label>
 
-          <div className="col-span-full p-4 bg-emerald-50/90 rounded-2xl border border-emerald-200 space-y-3">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <label className="text-xs font-extrabold text-emerald-950 flex items-center gap-1.5">
-                <MapPin size={15} className="text-emerald-600" /> Base Location & Sector GPS
-              </label>
-              <button
-                type="button"
-                onClick={handleDetectGPS}
-                disabled={gpsLoading}
-                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
-              >
-                <Navigation size={13} className={gpsLoading ? "animate-spin" : ""} />
-                {gpsLoading ? "Detecting Location..." : "Select Current Location"}
-              </button>
-            </div>
-
-            <div className="input-with-icon bg-white rounded-xl border border-stone-300">
-              <MapPin size={16} className="text-stone-400" />
-              <input 
-                name="location" 
-                required 
-                placeholder="District or Landmark (Auto-filled by Select Current Location)"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                className="w-full py-2 text-xs font-semibold text-stone-800 focus:outline-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <label className="text-xs font-bold text-stone-700">
-                Latitude
-                <input 
-                  name="lat" 
-                  required 
-                  type="number" 
-                  step="any"
-                  value={lat}
-                  onChange={(e) => setLat(e.target.value)}
-                  className="w-full mt-1 p-2 bg-white rounded-lg border border-stone-300 font-mono text-xs"
-                />
-              </label>
-              <label className="text-xs font-bold text-stone-700">
-                Longitude
-                <input 
-                  name="lng" 
-                  required 
-                  type="number" 
-                  step="any"
-                  value={lng}
-                  onChange={(e) => setLng(e.target.value)}
-                  className="w-full mt-1 p-2 bg-white rounded-lg border border-stone-300 font-mono text-xs"
-                />
-              </label>
-            </div>
-
-            <div className="p-2.5 bg-purple-50 border border-purple-200 rounded-xl space-y-1 text-xs text-purple-950">
-              <div className="flex items-center gap-1 font-bold text-purple-900">
-                <Award size={14} className="text-purple-600" />
-                <span>Region Jurisdiction: <strong>{regionName}</strong></span>
-              </div>
-              <p className="text-[11px] text-purple-800 flex items-center gap-1 font-medium">
-                <ShieldCheck size={13} className="text-purple-600" />
-                Direct Routing: Volunteer requests go directly to the <strong>Rescue Team Head</strong> for regional mobilization (Not central administration).
-              </p>
-            </div>
-          </div>
+          <label className="adm-field cz-span">
+            <span>
+              <MapPin size={13} /> Base location
+            </span>
+            <input
+              name="location"
+              required
+              placeholder="District or landmark"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={handleDetectGPS}
+              disabled={gpsLoading}
+              className="adm-btn"
+              style={{ marginTop: 10, width: "100%", justifyContent: "center" }}
+            >
+              <Navigation size={13} />
+              {gpsLoading ? "Detecting…" : "Use current location"}
+            </button>
+          </label>
         </div>
 
-        <button 
-          className="form-submit citizen-submit flex items-center justify-center gap-2" 
+        <div className="adm-kv">
+          <span>Region</span>
+          <strong>{regionName}</strong>
+        </div>
+        <div className="adm-kv">
+          <span>Coordinates</span>
+          <strong style={{ fontFamily: "ui-monospace, monospace" }}>
+            {lat}, {lng}
+          </strong>
+        </div>
+
+        <div className="adm-note">
+          <span>
+            Pledges route directly to the <strong>regional rescue lead</strong> for mobilisation, not
+            central administration.
+          </span>
+        </div>
+
+        <button
+          className="adm-btn adm-btn--primary"
           type="submit"
           disabled={loading}
+          style={{ width: "max-content" }}
         >
-          <Send size={16} /> 
-          {loading ? "Registering Resource..." : "Pledge Community Resource"}
+          <Send size={14} />
+          {loading ? "Registering…" : "Pledge resource"}
         </button>
       </form>
     </>

@@ -399,6 +399,31 @@ export function calcDistanceKm(lat1: number, lon1: number, lat2: number, lon2: n
   return R * c;
 }
 
+// ── Safe Check-In Sharing ──
+
+import { buildSafeSnapshot, ReportLike, SafeStatusView } from "@/lib/safeShare";
+export { buildSafeSnapshot } from "@/lib/safeShare";
+export type { SafeStatusView } from "@/lib/safeShare";
+
+/**
+ * Publish a public "I'm safe" snapshot so a shared /safe/<id> link resolves even
+ * when the rescue backend or DB is offline. Best-effort: a failure here should
+ * not block the citizen from sharing the link.
+ */
+export async function apiPublishSafeShare(report: ReportLike): Promise<SafeStatusView> {
+  const snapshot = buildSafeSnapshot(report);
+  try {
+    await fetch(`${API_BASE_URL}/api/safe/${encodeURIComponent(snapshot.id)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(snapshot),
+    });
+  } catch (err) {
+    console.warn("apiPublishSafeShare: could not reach server, link may be local-only:", err);
+  }
+  return snapshot;
+}
+
 // ── Original Citizen Endpoints ──
 
 export async function apiSubmitReport(formData: FormData): Promise<{ report: ReportItem; verifiedReports?: ReportItem[]; action?: string }> {

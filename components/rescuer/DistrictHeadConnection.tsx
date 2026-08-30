@@ -67,7 +67,7 @@ export function DistrictHeadConnection({
       setDirectives((prev) => prev.map((d) => (d.id === directiveId ? updated : d)));
       setSelectedDirective(updated);
       setAckNote("");
-      setActionSuccess("Directive acknowledged and confirmation transmitted to District Authority Command.");
+      setActionSuccess("Acknowledged. Confirmation sent to the district office.");
       setTimeout(() => setActionSuccess(null), 3500);
     } catch (err) {
       console.warn("Could not acknowledge directive:", err);
@@ -90,7 +90,7 @@ export function DistrictHeadConnection({
         priority: "high",
       });
       setReplyMessage("");
-      setActionSuccess("Tactical transmission dispatched directly to District Head command channel.");
+      setActionSuccess("Message sent to the district head.");
       await loadDirectives();
       setTimeout(() => setActionSuccess(null), 3500);
     } catch (err) {
@@ -112,38 +112,27 @@ export function DistrictHeadConnection({
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div className="adm-card border-l-[4px] border-l-[#b45309] space-y-3">
+      <div className="adm-card space-y-2">
         <div className="flex items-start justify-between flex-wrap gap-3">
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="adm-status adm-status--blue flex items-center gap-1">
-                <Building2 size={12} /> District Head Direct Link
-              </span>
-              <span className="adm-status adm-status--green font-mono">
-                ENCRYPTED SAT-COM V-4
-              </span>
+              <span className="adm-status adm-status--blue">Direct link</span>
               {unackCount > 0 && (
-                <span className="adm-status adm-status--red">
-                  {unackCount} Action Required
-                </span>
+                <span className="adm-status adm-status--red">{unackCount} to acknowledge</span>
               )}
             </div>
             <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <Radio size={20} className="text-[#b45309]" />
-              District Head Connection &amp; Official Orders Channel
+              <Radio size={18} className="text-(--a-accent)" />
+              District Head
             </h1>
-            <p className="text-xs text-slate-600 max-w-3xl">
-              Dedicated authority bridge between the <b>District Disaster Head (Admin)</b> and <b>Rescue Team Commander ({headName})</b>.
-              Receive strategic district orders, priority resource directives, and send immediate tactical readiness acknowledgments.
+            <p className="text-xs text-slate-500 max-w-2xl">
+              Orders and messages between the district office and {headName}. Acknowledge each order to confirm readiness.
             </p>
           </div>
 
           <div className="text-right">
-            <span className="text-[11px] uppercase font-bold text-slate-500 block">Office Jurisdiction</span>
+            <span className="text-[10px] uppercase font-bold text-slate-500 block">Office</span>
             <strong className="text-xs font-bold text-slate-900 block">{officeName}</strong>
-            <span className="text-[10px] text-emerald-600 font-bold flex items-center justify-end gap-1 mt-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" /> Live Connected
-            </span>
           </div>
         </div>
       </div>
@@ -160,7 +149,7 @@ export function DistrictHeadConnection({
         {/* Left Column: Directives Feed (5 cols) */}
         <div className="lg:col-span-5 space-y-4">
           <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-slate-200">
-            <span className="eyebrow">Incoming Directives</span>
+            <span className="eyebrow">Orders</span>
             <div className="adm-segment">
               <button
                 type="button"
@@ -188,11 +177,11 @@ export function DistrictHeadConnection({
 
           {loading && directives.length === 0 ? (
             <div className="adm-card text-center py-8 text-xs text-slate-400">
-              Synchronizing with District Command feed…
+              Loading…
             </div>
           ) : filteredDirectives.length === 0 ? (
             <div className="adm-card text-center py-8 text-xs text-slate-500">
-              No orders matching this filter.
+              None
             </div>
           ) : (
             <div className="space-y-2.5">
@@ -262,11 +251,11 @@ export function DistrictHeadConnection({
                     </span>
                     {selectedDirective.acknowledged ? (
                       <span className="adm-status adm-status--green flex items-center gap-1">
-                        <CheckCheck size={11} /> Acknowledged by Team Head
+                        <CheckCheck size={11} /> Acknowledged
                       </span>
                     ) : (
                       <span className="adm-status adm-status--amber flex items-center gap-1">
-                        <Clock size={11} /> Awaiting Commander Ack
+                        <Clock size={11} /> Pending
                       </span>
                     )}
                   </div>
@@ -283,21 +272,21 @@ export function DistrictHeadConnection({
               {/* Source & Authority Info */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="adm-kv">
-                  <span className="flex items-center gap-1.5"><Building2 size={13} className="text-slate-400" /> Origin Authority</span>
+                  <span className="flex items-center gap-1.5"><Building2 size={13} className="text-slate-400" /> From</span>
                   <strong className="text-xs text-slate-900 truncate">{selectedDirective.adminName}</strong>
                 </div>
                 <div className="adm-kv">
-                  <span className="flex items-center gap-1.5"><Award size={13} className="text-slate-400" /> Target Recipient</span>
-                  <strong className="text-xs text-slate-900 truncate">Team Head ({headName})</strong>
+                  <span className="flex items-center gap-1.5"><Award size={13} className="text-slate-400" /> To</span>
+                  <strong className="text-xs text-slate-900 truncate">{headName}</strong>
                 </div>
               </div>
 
               {/* Message Payload */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-none space-y-2">
+              <div className="p-4 bg-slate-50 border border-slate-200 space-y-2">
                 <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500 block">
-                  Official Directive Mandate &amp; Instructions:
+                  Instructions
                 </span>
-                <p className="text-xs text-slate-800 leading-relaxed font-sans whitespace-pre-line">
+                <p className="text-xs text-slate-800 leading-relaxed whitespace-pre-line">
                   {selectedDirective.message}
                 </p>
               </div>
@@ -306,7 +295,7 @@ export function DistrictHeadConnection({
               {selectedDirective.attachedResourceTarget && (
                 <div className="p-3.5 bg-amber-500/10 border border-amber-300 space-y-1">
                   <span className="text-[10px] uppercase font-bold text-amber-900 tracking-wider flex items-center gap-1">
-                    <ShieldAlert size={13} /> Attached Resource Deployment Target
+                    <ShieldAlert size={13} /> Resource target
                   </span>
                   <div className="flex items-baseline justify-between pt-1">
                     <span className="text-xs font-semibold text-amber-950">
@@ -324,24 +313,24 @@ export function DistrictHeadConnection({
                 <div className="p-3 bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="font-bold flex items-center gap-1.5">
-                      <CheckCheck size={14} className="text-emerald-700" /> Acknowledged &amp; Verified
+                      <CheckCheck size={14} className="text-emerald-700" /> Acknowledged
                     </span>
                     <span className="text-[10px] text-emerald-700 font-mono">
                       {selectedDirective.acknowledgedAt ? new Date(selectedDirective.acknowledgedAt).toLocaleTimeString() : ""}
                     </span>
                   </div>
                   <p className="text-[11px] text-emerald-800 mt-1 italic">
-                    &ldquo;{selectedDirective.acknowledgmentNote || "Directive received and activated."}&rdquo;
+                    &ldquo;{selectedDirective.acknowledgmentNote || "Received."}&rdquo;
                   </p>
                 </div>
               ) : (
                 <div className="p-4 bg-white border border-slate-200 space-y-3">
-                  <span className="eyebrow block">Commander Response &amp; Acknowledgment</span>
+                  <span className="eyebrow block">Response</span>
                   <input
                     type="text"
                     value={ackNote}
                     onChange={(e) => setAckNote(e.target.value)}
-                    placeholder="Enter tactical response / operational status note for District Head…"
+                    placeholder="Add a status note (optional)…"
                     className="w-full p-2.5 bg-white border border-[#cbd5e1] text-xs font-semibold text-slate-900 focus:border-[#b45309] focus:outline-hidden"
                   />
                   <button
@@ -351,22 +340,22 @@ export function DistrictHeadConnection({
                     className="adm-btn adm-btn--primary w-full justify-center"
                   >
                     <CheckCheck size={14} />
-                    {actionLoading ? "Transmitting..." : "Acknowledge & Transmit Readiness to District Head"}
+                    {actionLoading ? "Sending…" : "Acknowledge"}
                   </button>
                 </div>
               )}
             </div>
           ) : (
             <div className="adm-card text-center py-12 text-xs text-slate-500">
-              Select an official directive from the list to inspect details.
+              Select an order to view it.
             </div>
           )}
 
-          {/* Quick Message to District Admin Head Form */}
+          {/* Message to District Head */}
           <div className="adm-card space-y-4">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
-              <MessageSquare size={16} className="text-[#b45309]" />
-              <span className="font-bold text-xs text-slate-900">Direct Secure Uplink to District Head</span>
+              <MessageSquare size={16} className="text-(--a-accent)" />
+              <span className="font-bold text-xs text-slate-900">Message the district head</span>
             </div>
             <form onSubmit={handleSendReplyToAdmin} className="space-y-3">
               <textarea
@@ -374,7 +363,7 @@ export function DistrictHeadConnection({
                 required
                 value={replyMessage}
                 onChange={(e) => setReplyMessage(e.target.value)}
-                placeholder="Compose direct tactical update, resource requisition, or incident briefing to District Magistrate / Disaster Authority…"
+                placeholder="Field update, resource request, or incident briefing…"
                 className="w-full p-2.5 bg-white border border-[#cbd5e1] text-xs font-semibold text-slate-900 focus:border-[#b45309] focus:outline-hidden"
               />
               <button
@@ -382,7 +371,7 @@ export function DistrictHeadConnection({
                 disabled={actionLoading || !replyMessage.trim()}
                 className="adm-btn adm-btn--primary justify-center"
               >
-                <Send size={13} /> Dispatch Message to District Head
+                <Send size={13} /> Send
               </button>
             </form>
           </div>

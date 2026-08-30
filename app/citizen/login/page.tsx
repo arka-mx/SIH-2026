@@ -65,7 +65,6 @@ export default function CitizenLoginPage() {
   const router = useRouter();
   const { name: lang } = useLanguage();
   const [name, setName] = useState(process.env.NEXT_PUBLIC_DEFAULT_CITIZEN_NAME || "Rajesh Kumar");
-  const [location, setLocation] = useState(process.env.NEXT_PUBLIC_DEFAULT_CITIZEN_LOCATION || "Mumbai Coastal District");
 
   const t = TRANSLATIONS[lang as SupportedLang] || TRANSLATIONS.English;
 
@@ -93,19 +92,6 @@ export default function CitizenLoginPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your full name"
-              className="mt-1"
-            />
-          </label>
-
-          <label htmlFor="citizen-location">
-            {t.location}
-            <input
-              id="citizen-location"
-              name="location"
-              required
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="City, district or village"
               className="mt-1"
             />
           </label>

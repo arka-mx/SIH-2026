@@ -14,7 +14,7 @@ import { MemberFieldPortal } from "@/components/rescuer/MemberFieldPortal";
 import { apiGetAllIncidents, apiGetIncidentsForOfficeRegion, ReportItem } from "@/lib/api";
 import { fetchRescuerSession, RescuerUserSession } from "@/lib/rescuerAuth";
 import { RescuerSupply, RescuerUnitProfile } from "@/types/rescuer";
-import { RotateCw, MapPin, LogIn, Crown, HardHat, Radio, Eye, PackagePlus } from "lucide-react";
+import { RotateCw, MapPin, LogIn, Radio, Eye, PackagePlus } from "lucide-react";
 
 // Mock Rescuer Database mapping
 const INITIAL_RESCUER_PROFILES: Record<string, RescuerUnitProfile> = {
@@ -240,29 +240,20 @@ export default function RescuerDetailPage({
       {/* ── Top Header Strip ── */}
       <div className="adm-card">
         <div className="flex items-start justify-between flex-wrap gap-4">
-          <div className="space-y-2 min-w-0">
+          <div className="space-y-1.5 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="adm-status adm-status--mute font-mono">{profile.callsign}</span>
-              <span className={`adm-status ${isTeamHead ? "adm-status--amber" : "adm-status--green"} flex items-center gap-1`}>
-                {isTeamHead ? <Crown size={12} /> : <HardHat size={12} />}
-                {isTeamHead ? "Rescue Team Head / Commander" : "Normal Field Rescuer / Squad Member"}
-              </span>
-              <span className="adm-status adm-status--blue">
-                {officeName} · {session?.regionRadiusKm || 25} km
+              <span className={`adm-status ${isTeamHead ? "adm-status--amber" : "adm-status--green"}`}>
+                {isTeamHead ? "Team Head" : "Field Member"}
               </span>
             </div>
 
-            <h1 className="text-xl font-bold text-slate-900">
-              {profile.name}
-              <span className="ml-2 text-xs font-normal text-slate-500">
-                ({isTeamHead ? "Command Authority" : "Field Operations Unit"})
-              </span>
-            </h1>
+            <h1 className="text-xl font-bold text-slate-900">{profile.name}</h1>
 
             <p className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
-              <span>Commander: <b className="text-slate-800">{commanderName}</b></span>
+              <span>{commanderName}</span>
               <span>·</span>
-              <span>Office Base: <b className="text-slate-800">{officeName}</b></span>
+              <span>{officeName}</span>
               <span>·</span>
               <span className="flex items-center gap-1 font-mono">
                 <MapPin size={12} /> {officeLat.toFixed(4)}, {officeLng.toFixed(4)}
@@ -274,13 +265,12 @@ export default function RescuerDetailPage({
             <button
               type="button"
               onClick={() => handleRoleToggle(!isTeamHead)}
-              className="adm-btn text-xs font-bold"
-              title="Quickly switch between Team Head and Member roles"
+              className="adm-btn"
             >
-              Switch to {isTeamHead ? "Field Member View" : "Team Head View"}
+              {isTeamHead ? "Member view" : "Head view"}
             </button>
             <Link href="/rescuer/login" className="adm-btn">
-              <LogIn size={14} /> Office Login
+              <LogIn size={14} /> Office login
             </Link>
             <button onClick={loadData} className="adm-btn">
               <RotateCw size={14} /> Refresh
@@ -297,61 +287,40 @@ export default function RescuerDetailPage({
           {/* TAB 1: OVERVIEW / DASHBOARD */}
           {activeTab === "overview" && (
             <div className="space-y-6">
-              {/* Quick Navigation Cards */}
+              {/* Quick Navigation */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div
-                  onClick={() => setActiveTab("district-head")}
-                  className="p-4 border border-amber-300 bg-amber-50/50 cursor-pointer hover:bg-amber-50 transition-all space-y-1"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-bold text-amber-900 flex items-center gap-1">
-                      <Radio size={12} /> District Head Connection
+                {[
+                  {
+                    tab: "district-head",
+                    icon: Radio,
+                    title: "District Head",
+                    desc: "Orders and messages from the district office.",
+                  },
+                  {
+                    tab: "disasters",
+                    icon: Eye,
+                    title: "Radar",
+                    desc: "Live citizen SOS incidents near your office.",
+                  },
+                  {
+                    tab: "allocate",
+                    icon: PackagePlus,
+                    title: "Allocate",
+                    desc: "Assign ration and resource quotas to members.",
+                  },
+                ].map(({ tab, icon: Icon, title, desc }) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(tab)}
+                    className="adm-card adm-card--plain text-left hover:border-slate-400 transition-colors space-y-1.5 p-4"
+                  >
+                    <span className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                      <Icon size={15} className="text-(--a-accent)" /> {title}
                     </span>
-                    <span className="text-[10px] bg-amber-500 text-white font-bold px-1.5 py-0.5 rounded-sm">
-                      Head Only
-                    </span>
-                  </div>
-                  <h3 className="font-bold text-sm text-amber-950">Official Admin Directives</h3>
-                  <p className="text-[11px] text-amber-800">
-                    Access orders, notifications, and broadcast messages from District Head.
-                  </p>
-                </div>
-
-                <div
-                  onClick={() => setActiveTab("disasters")}
-                  className="p-4 border border-slate-300 bg-slate-50/70 cursor-pointer hover:bg-slate-100 transition-all space-y-1"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-bold text-slate-700 flex items-center gap-1">
-                      <Eye size={12} /> Tactical Radar
-                    </span>
-                    <span className="text-[10px] bg-slate-700 text-white font-bold px-1.5 py-0.5 rounded-sm">
-                      Read-Only
-                    </span>
-                  </div>
-                  <h3 className="font-bold text-sm text-slate-900">Nearest Disaster Watch Map</h3>
-                  <p className="text-[11px] text-slate-600">
-                    Observe active citizen SOS incidents sent to admin in real time.
-                  </p>
-                </div>
-
-                <div
-                  onClick={() => setActiveTab("allocate")}
-                  className="p-4 border border-teal-300 bg-teal-50/50 cursor-pointer hover:bg-teal-50 transition-all space-y-1"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-bold text-teal-900 flex items-center gap-1">
-                      <PackagePlus size={12} /> Member Allocation
-                    </span>
-                    <span className="text-[10px] bg-teal-700 text-white font-bold px-1.5 py-0.5 rounded-sm">
-                      Live Sync
-                    </span>
-                  </div>
-                  <h3 className="font-bold text-sm text-teal-950">Ration &amp; Resource Assignment</h3>
-                  <p className="text-[11px] text-teal-800">
-                    Assign quotas to field members; automatically deducts from Admin pool.
-                  </p>
-                </div>
+                    <p className="text-[11px] text-slate-500">{desc}</p>
+                  </button>
+                ))}
               </div>
 
               {/* Disaster Assignment & Fail-Safe Control */}
@@ -458,10 +427,10 @@ export default function RescuerDetailPage({
           {/* TAB 2: MEMBER UNIT SUPPLIES */}
           {activeTab === "member-supplies" && (
             <div className="space-y-4">
-              <div className="adm-card border-l-[4px] border-l-[#115e59]">
-                <h2 className="text-base font-bold text-slate-900">Unit Supply Inventory</h2>
+              <div className="adm-card">
+                <h2 className="text-base font-bold text-slate-900">Supplies</h2>
                 <p className="text-xs text-slate-500">
-                  Field gear and vehicle loadout currently deployed with {profile.name}.
+                  Gear and loadout deployed with {profile.name}.
                 </p>
               </div>
               <SupplyTracker

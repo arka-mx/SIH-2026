@@ -1,23 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef, FormEvent } from "react";
-import { 
-  AlertTriangle, 
-  HeartPulse, 
-  MapPin, 
-  Send, 
-  UsersRound, 
-  Navigation, 
-  Camera, 
-  CheckCircle2, 
-  RotateCcw,
-  Sparkles,
-  ShieldCheck,
+import {
+  AlertTriangle,
+  MapPin,
+  Send,
+  HandHeart,
+  Navigation,
+  CheckCircle2,
   X,
-  Radio,
-  Zap,
-  PhoneCall,
-  Clock
+  Share2,
 } from "lucide-react";
 import Link from "next/link";
 import { 
@@ -26,13 +18,13 @@ import {
   apiReverseGeocodeDetailed,
   apiGetIncidentById, 
   apiGetActiveReportForSession,
-  ReportItem 
+  apiPublishSafeShare,
+  ReportItem
 } from "@/lib/api";
 import { getOrCreateDeviceId } from "@/lib/device";
 import { CitizenLiveTrackingMap } from "@/components/citizen/CitizenLiveTrackingMap";
 import { WeatherWidget } from "@/components/ui/WeatherWidget";
 import { useLanguage } from "@/lib/language";
-import { LanguageSelect } from "@/components/ui/LanguageSelect";
 
 const TRANSLATIONS = {
   en: {
@@ -272,6 +264,46 @@ export function CitizenDashboard() {
   const [submittedReport, setSubmittedReport] = useState<ReportItem | null>(null);
   const [activeExistingReport, setActiveExistingReport] = useState<ReportItem | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [safeLinkCopied, setSafeLinkCopied] = useState<boolean>(false);
+
+  async function handleShareSafeLink(report: ReportItem) {
+    // Prefer the richer report from the feed (coords, address, live status) over
+    // the freshly-submitted event, then publish a public snapshot so the link
+    // resolves even when the backend is offline.
+    let source: ReportItem = report;
+    try {
+      const active = await apiGetActiveReportForSession(getOrCreateDeviceId());
+      if (active) source = active;
+    } catch {
+      // offline — publish from what we have
+    }
+
+    const snapshot = await apiPublishSafeShare(source);
+    const shareUrl = `${window.location.origin}/safe/${snapshot.id}`;
+    const shareData = {
+      title: "My safety status — Momentum",
+      text: "I've shared my location and safety status. You can follow it live here:",
+      url: shareUrl,
+    };
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch (err) {
+      // share sheet dismissed — don't fall back to clipboard
+      if (err instanceof Error && err.name === "AbortError") return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch {
+      // clipboard blocked — still show feedback
+    }
+    setSafeLinkCopied(true);
+    setTimeout(() => setSafeLinkCopied(false), 2500);
+  }
 
   // Initialize Immutable Device-Specific Unique ID & check for active report
   useEffect(() => {
@@ -303,6 +335,18 @@ export function CitizenDashboard() {
 
     return () => clearInterval(interval);
   }, [submittedReport?.id]);
+
+  // Auto-detect current location when the report modal opens
+  const gpsAutoRequestedRef = useRef(false);
+  useEffect(() => {
+    if (isModalOpen && !gpsAutoRequestedRef.current) {
+      gpsAutoRequestedRef.current = true;
+      handleDetectGPS();
+    }
+    if (!isModalOpen) {
+      gpsAutoRequestedRef.current = false;
+    }
+  }, [isModalOpen]);
 
   async function handleDetectGPS() {
     if (!navigator.geolocation) {
@@ -403,6 +447,13 @@ export function CitizenDashboard() {
 
   const t = TRANSLATIONS[lang];
 
+  const dispatched = Boolean(submittedReport?.assigned_rescuer);
+  const trackModifier = dispatched
+    ? "cz-track--dispatched"
+    : submittedReport?.status === "verified"
+    ? "cz-track--verified"
+    : "";
+
   return (
     <>
       <div className="page-heading">
@@ -410,246 +461,189 @@ export function CitizenDashboard() {
           <p className="eyebrow">{t.desk}</p>
           <h1>{t.title}</h1>
         </div>
-        <div className="flex items-center gap-3">
-          <WeatherWidget lat={parseFloat(lat) || 19.0760} lng={parseFloat(lng) || 72.8777} />
-
-          <LanguageSelect variant="compact" />
-
-          <span className="login-note flex items-center gap-1.5 border border-purple-300 bg-purple-50/80 px-3 py-1 rounded-xl shadow-2xs">
-            <ShieldCheck size={14} className="text-purple-600" />
-            <span className="text-xs font-bold text-purple-950">Device ID:</span>
-            <code className="text-xs bg-white text-purple-900 px-2 py-0.5 rounded font-mono font-extrabold border border-purple-200" title={`Device ID: ${sessionId}`}>
-              {sessionId.slice(0, 18)}...
-            </code>
-          </span>
-        </div>
+        <WeatherWidget lat={parseFloat(lat) || 19.0760} lng={parseFloat(lng) || 72.8777} />
       </div>
 
-      {/* Main Action Hub */}
-      <div className="citizen-actions mb-6">
-        <button 
-          type="button" 
-          onClick={() => setIsModalOpen(true)}
-          className="report-action active flex items-center justify-between p-6 bg-gradient-to-r from-red-600 via-rose-600 to-rose-700 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all border-2 border-red-400 group cursor-pointer"
-        >
+      <div className="cz-actions">
+        <button type="button" onClick={() => setIsModalOpen(true)} className="cz-hero">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform">
-              <AlertTriangle size={32} className="text-white animate-bounce" />
-            </div>
-            <div className="text-left">
-              <span className="text-xs uppercase font-bold tracking-wider text-rose-100 bg-white/10 px-2.5 py-0.5 rounded-full">
-                Zero-Login Instant Request
-              </span>
-              <h2 className="text-xl font-extrabold text-white mt-1">Report an Emergency (SOS Window)</h2>
-              <p className="text-xs text-rose-100">Click to open quick SOS window — Auto-location & disaster type</p>
+            <span className="cz-hero__icon">
+              <AlertTriangle size={22} />
+            </span>
+            <div>
+              <span className="cz-hero__eyebrow">No sign-in needed</span>
+              <h2>Report an emergency</h2>
+              <p>Auto location and disaster type. Sent straight to dispatch.</p>
             </div>
           </div>
-          <span className="px-4 py-2 bg-white text-rose-700 font-extrabold text-xs rounded-xl shadow-md group-hover:bg-rose-50 transition-colors whitespace-nowrap">
-            Open Emergency Window →
-          </span>
+          <span className="cz-hero__cta">Open →</span>
         </button>
 
-        <Link href="/citizen/volunteer" className="volunteer-action flex items-center justify-between p-6 bg-white border border-stone-200 hover:border-emerald-500 rounded-2xl shadow-2xs transition-all">
-          <div className="flex items-center gap-3">
-            <UsersRound size={26} className="text-emerald-600" />
+        <Link href="/citizen/volunteer" className="cz-hero cz-hero--secondary">
+          <div className="flex items-center gap-4">
+            <span className="cz-hero__icon">
+              <HandHeart size={22} />
+            </span>
             <div>
-              <strong className="text-stone-900 text-sm font-bold block">Pledge Community Resource</strong>
-              <span className="text-xs text-stone-500">Offer boats, vehicles, shelter space, or volunteer time</span>
+              <span className="cz-hero__eyebrow">Community pool</span>
+              <h2>Pledge a resource</h2>
+              <p>Boats, vehicles, shelter space, or your time.</p>
             </div>
           </div>
+          <span className="cz-hero__cta">Add →</span>
         </Link>
       </div>
 
       {error && (
-        <div className="mb-6 p-4 rounded-xl border border-red-300 bg-red-50 text-red-900 text-sm flex items-center gap-2 shadow-2xs">
-          <AlertTriangle size={18} className="text-red-600 flex-shrink-0" />
+        <div className="adm-note" style={{ borderLeftColor: "var(--c-red)", marginBottom: 16 }}>
+          <AlertTriangle size={16} style={{ color: "var(--c-red)" }} />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Submitted Report Live Tracking Dashboard */}
       {submittedReport && (
-        <div className="space-y-4 mb-6">
-          <div className={`p-5 rounded-2xl border shadow-md transition-all ${
-            submittedReport.assigned_rescuer
-              ? "bg-gradient-to-r from-emerald-900 to-slate-900 text-white border-emerald-500"
-              : submittedReport.status === "verified"
-              ? "bg-gradient-to-r from-blue-900 to-slate-900 text-white border-blue-500" 
-              : "bg-gradient-to-r from-amber-900 to-slate-900 text-white border-amber-500"
-          }`}>
+        <div style={{ marginBottom: 24 }}>
+          <div className={`cz-track ${trackModifier}`}>
             <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="flex gap-3">
-                <div className="p-2 bg-white/10 rounded-xl">
-                  <CheckCircle2 className={submittedReport.assigned_rescuer ? "text-emerald-400" : "text-amber-400"} size={26} />
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3>Report active</h3>
+                  {dispatched ? (
+                    <span className="adm-status adm-status--green">
+                      <CheckCircle2 size={11} /> Rescuer dispatched
+                    </span>
+                  ) : submittedReport.status === "verified" ? (
+                    <span className="adm-status adm-status--blue">Verified</span>
+                  ) : (
+                    <span className="adm-status adm-status--amber">Awaiting review</span>
+                  )}
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-extrabold text-base text-white">
-                      Active Emergency SOS Request Transmitted
-                    </h3>
-                    {submittedReport.assigned_rescuer ? (
-                      <span className="bg-emerald-500 text-white text-[11px] px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1 shadow-2xs">
-                        <Sparkles size={12} /> Rescuer Dispatched
-                      </span>
-                    ) : (
-                      <span className="bg-amber-500 text-slate-950 text-[11px] px-2.5 py-0.5 rounded-full font-bold">
-                        Awaiting Admin Review / Nearest Fallback
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-stone-300 mt-1">
-                    Incident ID: <strong className="font-mono text-white">{submittedReport.id}</strong> · Session: <strong className="font-mono text-amber-300">{submittedReport.session_id}</strong>
-                  </p>
-                  <p className="text-xs text-emerald-200 mt-1 font-medium">
-                    {submittedReport.assigned_rescuer
-                      ? `✓ Rescuer ${submittedReport.assigned_rescuer.name} (${submittedReport.assigned_rescuer.callsign}) is moving toward your coordinates!`
-                      : "⏳ Request is live on the Admin Dispatch Desk. If admin approves, rescuers are assigned; if admin denies, nearest rescuers auto-route!"}
-                  </p>
+                <p>
+                  Incident <code>{submittedReport.id}</code> · Session{" "}
+                  <code>{submittedReport.session_id}</code>
+                </p>
+                <p>
+                  {dispatched && submittedReport.assigned_rescuer
+                    ? `${submittedReport.assigned_rescuer.name} (${submittedReport.assigned_rescuer.callsign}) is en route to your location.`
+                    : "On the dispatch map. If review is delayed, the nearest available rescuer is auto-routed."}
+                </p>
+                <div className="cz-steps">
+                  <span className="done">Submitted</span>
+                  <span className={submittedReport.status !== "unverified" ? "done" : ""}>Verified</span>
+                  <span className={dispatched ? "active" : ""}>Dispatched</span>
+                  <span className={submittedReport.status === "resolved" ? "done" : ""}>Resolved</span>
                 </div>
               </div>
-
-              <Link 
-                href="/citizen/history" 
-                className="bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-bold px-3.5 py-2 rounded-xl backdrop-blur-md shadow-2xs whitespace-nowrap"
-              >
-                View History →
-              </Link>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleShareSafeLink(submittedReport)}
+                  className="adm-btn"
+                >
+                  <Share2 size={13} />
+                  {safeLinkCopied ? "Link copied" : "Share “I’m safe” link"}
+                </button>
+                <Link href="/citizen/history" className="adm-btn">
+                  Status →
+                </Link>
+              </div>
             </div>
           </div>
-
-          {/* Citizen Live Tracking Map with Polling */}
           <CitizenLiveTrackingMap incident={submittedReport} onIncidentUpdated={setSubmittedReport} />
         </div>
       )}
 
-      {/* ── EMERGENCY REPORTING WINDOW (MODAL POPUP) ── */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md animate-fadeIn">
-          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden">
-            {/* Modal Header */}
-            <div className="bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white p-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-white/20 rounded-xl">
-                  <HeartPulse size={24} className="text-white animate-pulse" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-lg text-white">Emergency SOS Window</h3>
-                  <span className="text-xs text-rose-100 flex items-center gap-1">
-                    <ShieldCheck size={12} /> IP Session: <code className="font-mono bg-white/10 px-1.5 py-0.2 rounded">{sessionId}</code>
-                  </span>
-                </div>
+        <div className="cz-modal" onClick={() => setIsModalOpen(false)}>
+          <div className="cz-modal__panel" onClick={(e) => e.stopPropagation()}>
+            <div className="cz-modal__head">
+              <div>
+                <h3>Report an emergency</h3>
+                <span>Session {sessionId.slice(0, 14)}…</span>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="p-1.5 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-all cursor-pointer"
-              >
-                <X size={20} />
+              <button type="button" className="cz-modal__close" onClick={() => setIsModalOpen(false)}>
+                <X size={16} />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-6">
+            <div className="cz-modal__body">
               {activeExistingReport ? (
-                <div className="p-4 bg-amber-50 border border-amber-300 text-amber-950 rounded-2xl text-xs space-y-3">
-                  <div className="flex items-center gap-2 font-bold text-sm text-amber-900">
-                    <AlertTriangle size={18} className="text-amber-600" />
-                    Active Emergency Request Already Registered!
+                <>
+                  <div className="adm-note">
+                    <AlertTriangle size={16} />
+                    <span>
+                      A report (<strong>{activeExistingReport.id}</strong>) is already active for this
+                      device. Only one report can run at a time.
+                    </span>
                   </div>
-                  <p>
-                    An active emergency request (ID: <strong className="font-mono">{activeExistingReport.id}</strong>) is currently active for your IP session ID. 
-                  </p>
-                  <p>
-                    To prevent system overload, citizens cannot submit duplicate requests while an active request is being processed.
-                  </p>
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-2xs text-xs cursor-pointer"
+                    className="adm-btn adm-btn--primary"
+                    style={{ justifyContent: "center" }}
                   >
-                    Close Window & Track Assigned Rescuer
+                    Track current report
                   </button>
-                </div>
+                </>
               ) : (
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  {/* Location Selector (Select Current Location Button) */}
-                  <div className="p-4 bg-emerald-50/90 rounded-2xl border border-emerald-200 space-y-3">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <label className="text-xs font-extrabold text-emerald-950 flex items-center gap-1.5">
-                        <MapPin size={15} className="text-emerald-600" /> Emergency Location
-                      </label>
-                      <button
-                        type="button"
-                        onClick={handleDetectGPS}
-                        disabled={gpsLoading}
-                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
-                      >
-                        <Navigation size={13} className={gpsLoading ? "animate-spin" : ""} />
-                        {gpsLoading ? "Resolving GPS Address..." : "Select Current Location"}
-                      </button>
-                    </div>
-
-                    <div className="input-with-icon bg-white rounded-xl border border-stone-300">
-                      <MapPin size={16} className="text-stone-400" />
-                      <input 
-                        name="location" 
-                        required 
-                        placeholder="Location address (Auto-filled by Select Current Location)"
-                        value={locationName}
-                        onChange={(e) => setLocationName(e.target.value)}
-                        className="w-full py-2 text-xs font-semibold text-stone-800 focus:outline-hidden"
-                      />
-                    </div>
-
-                    <div className="p-2 bg-emerald-100/70 border border-emerald-300 rounded-xl space-y-1 text-xs text-emerald-950 font-sans">
-                      <div className="flex items-center gap-1 font-bold">
-                        <MapPin size={13} className="text-emerald-700" />
-                        <span>Region Jurisdiction: <strong>{regionName}</strong></span>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] font-mono text-emerald-900 pt-0.5 border-t border-emerald-200/70">
-                        <span>Latitude: <strong>{lat}</strong></span>
-                        <span>Longitude: <strong>{lng}</strong></span>
-                        <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-md font-sans font-extrabold shadow-2xs">Regionwise Routed</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Disaster Type */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-extrabold text-stone-800 block">
-                      Type of Disaster / Emergency
-                    </label>
-                    <select 
-                      name="disaster" 
-                      value={disasterType} 
-                      onChange={(e) => setDisasterType(e.target.value)}
-                      className="w-full p-3 bg-stone-50 border border-stone-300 rounded-xl text-xs font-bold text-stone-900 focus:ring-2 focus:ring-rose-500 focus:outline-hidden cursor-pointer"
-                    >
-                      <option value="flood">🌊 {t.flood}</option>
-                      <option value="cyclone">🌪️ {t.cyclone}</option>
-                      <option value="landslide">⛰️ {t.landslide}</option>
-                      <option value="medical">🚑 {t.medical}</option>
-                      <option value="fire">🔥 {t.fire}</option>
-                      <option value="other">⚠️ {t.other}</option>
-                    </select>
-                  </div>
-
-                  {/* Submit Button */}
-                  <div className="pt-2 flex items-center gap-3">
-                    <button 
+                <form onSubmit={handleSubmit} className="cz-modal__body" style={{ padding: 0 }}>
+                  <label className="adm-field">
+                    <span>
+                      <MapPin size={13} /> Location
+                    </span>
+                    <input
+                      name="location"
+                      required
+                      placeholder="Address or landmark"
+                      value={locationName}
+                      onChange={(e) => setLocationName(e.target.value)}
+                    />
+                    <button
                       type="button"
-                      onClick={() => setIsModalOpen(false)}
-                      className="w-1/3 py-3 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                      onClick={handleDetectGPS}
+                      disabled={gpsLoading}
+                      className="adm-btn"
+                      style={{ marginTop: 10, width: "100%", justifyContent: "center" }}
                     >
+                      <Navigation size={13} />
+                      {gpsLoading ? "Detecting…" : "Use current location"}
+                    </button>
+                  </label>
+
+                  <div className="adm-kv">
+                    <span>Region</span>
+                    <strong>{regionName}</strong>
+                  </div>
+                  <div className="adm-kv">
+                    <span>Coordinates</span>
+                    <strong style={{ fontFamily: "ui-monospace, monospace" }}>
+                      {lat}, {lng}
+                    </strong>
+                  </div>
+
+                  <label className="adm-field">
+                    <span>Type</span>
+                    <select
+                      name="disaster"
+                      value={disasterType}
+                      onChange={(e) => setDisasterType(e.target.value)}
+                    >
+                      <option value="flood">{t.flood}</option>
+                      <option value="cyclone">{t.cyclone}</option>
+                      <option value="landslide">{t.landslide}</option>
+                      <option value="medical">{t.medical}</option>
+                      <option value="fire">{t.fire}</option>
+                      <option value="other">{t.other}</option>
+                    </select>
+                  </label>
+
+                  <div className="cz-modal__actions">
+                    <button type="button" onClick={() => setIsModalOpen(false)} className="adm-btn">
                       Cancel
                     </button>
-                    <button 
-                      type="submit"
-                      disabled={loading}
-                      className="w-2/3 py-3 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white text-xs font-extrabold rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
-                    >
-                      <Send size={15} />
-                      {loading ? "Transmitting SOS..." : "Transmit Immediate Emergency SOS"}
+                    <button type="submit" disabled={loading} className="adm-btn adm-btn--danger">
+                      <Send size={14} />
+                      {loading ? "Sending…" : "Send report"}
                     </button>
                   </div>
                 </form>
