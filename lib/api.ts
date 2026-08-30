@@ -1,4 +1,5 @@
 import {
+  RescuerSupply,
   ResponseTeamRequest,
   CitizenResponse,
   PredeterminedPermissionSettings,
@@ -15,6 +16,7 @@ import type { VerificationResult } from "@/lib/reportVerification";
 export type { VerificationResult, VerificationTier } from "@/lib/reportVerification";
 
 export type {
+  RescuerSupply,
   ResponseTeamRequest,
   CitizenResponse,
   PredeterminedPermissionSettings,
@@ -1900,9 +1902,9 @@ export interface TeamHeadContactRecord {
   headName: string;
   headPhone: string;
   headOffice: string;
-  officeLat: number;
-  officeLng: number;
-  status: "available" | "en_route" | "at_scene" | "assigned";
+  officeLat?: number;
+  officeLng?: number;
+  status?: "available" | "en_route" | "at_scene" | "assigned";
   assignedIncidentId?: string;
   assignedIncidentTitle?: string;
   updatedAt: string;
@@ -2096,7 +2098,7 @@ export async function apiAssignTaskToTeamHead(
     title: `ASSIGNMENT: ${incident.type.toUpperCase()} (${distanceKm} km from ${head.headOffice})`,
     message: `You are hereby assigned to lead rescue operations for ${incident.id} (${incident.description || "Emergency Zone"}). Distance from your regional command base: ${distanceKm} km. Please mobilize your team and estimate required rations immediately.`,
     type: "order",
-    priority: "urgent",
+    priority: "high",
   });
 
   return {

@@ -60,6 +60,9 @@ export function MemberFieldPortal({
     headName,
     headPhone: headPhone || "",
     headOffice: headOffice || "",
+    officeLat: 0,
+    officeLng: 0,
+    status: "available",
     updatedAt: "",
   });
 

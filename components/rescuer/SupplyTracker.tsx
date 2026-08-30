@@ -14,6 +14,7 @@ import {
   Minus,
 } from "lucide-react";
 import { apiSyncRescuerSuppliesWithAdmin } from "@/lib/api";
+import { RescuerSupply } from "@/types/rescuer";
 
 interface SupplyTrackerProps {
   rescuerId?: string;
@@ -33,7 +34,7 @@ export function SupplyTracker({ rescuerId = "demo-team-alpha", initialSupplies, 
     const updated = { ...supplies, [key]: newVal };
     setSupplies(updated);
     if (onUpdateSupplies) onUpdateSupplies(updated);
-    setUpdateMsg(`Modified ${key.replace(/([A-Z])/g, " $1").toLowerCase()}. Click "Update Admin Master Pool" to save.`);
+    setUpdateMsg(`Modified ${String(key).replace(/([A-Z])/g, " $1").toLowerCase()}. Click "Update Admin Master Pool" to save.`);
   }
 
   async function handleSyncWithAdmin() {
