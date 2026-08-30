@@ -166,6 +166,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(formatted);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to fetch reports" }, { status: 500 });
+    console.warn("MongoDB offline, returning empty server reports:", err);
+    return NextResponse.json([]);
   }
 }

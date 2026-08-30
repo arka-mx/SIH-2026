@@ -59,6 +59,10 @@ export default function AdminPage() {
 
   useEffect(() => {
     fetchFreshData();
+    const interval = setInterval(() => {
+      fetchFreshData();
+    }, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const verified = incidents.filter((i) => i.status === "verified");

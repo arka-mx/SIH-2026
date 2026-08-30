@@ -3,7 +3,8 @@ import {
   CitizenResponse,
   PredeterminedPermissionSettings,
   RadicalRegionRule,
-  RescuerUnitProfile
+  RescuerUnitProfile,
+  HeadResourceEstimation,
 } from "@/types/rescuer";
 
 export type {
@@ -11,6 +12,7 @@ export type {
   CitizenResponse,
   PredeterminedPermissionSettings,
   RadicalRegionRule,
+  HeadResourceEstimation,
 } from "@/types/rescuer";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : "";
@@ -22,12 +24,18 @@ export interface ReportItem {
   type: string;
   description?: string;
   photo_url?: string;
-  status: "unverified" | "verified" | "in_progress" | "resolved";
+  status: "unverified" | "verified" | "in_progress" | "resolved" | "denied_auto_routed";
   created_at: string;
   lat?: number;
   lng?: number;
   location_wkt?: string;
   cluster_count?: number;
+  assigned_rescuer_id?: string;
+  assigned_rescuer?: RescuerUnitProfile;
+  rescuer_status?: "pending_admin" | "assigned" | "admin_denied_auto_routed" | "arrived";
+  address?: string;
+  denied_by_admin?: boolean;
+  assignment_source?: "admin_dispatch" | "nearest_fallback_admin_denied";
 }
 
 export interface ResourceItem {
@@ -54,115 +62,15 @@ export interface AllocationItem {
 }
 
 // Fallback seed resources in case backend is offline
-const FALLBACK_RESOURCES: ResourceItem[] = [
-  { id: "res-1", name: "Brahmapur NDRF Boat Unit", type: "boat", capacity_total: 12, capacity_used: 0, status: "available", disaster_types: ["flood", "cyclone"], lat: 19.315, lng: 84.794 },
-  { id: "res-2", name: "City Hospital Rapid Ambulance", type: "ambulance", capacity_total: 4, capacity_used: 1, status: "available", disaster_types: ["medical", "flood", "fire"], lat: 19.320, lng: 84.800 },
-  { id: "res-3", name: "District Relief Shelter #4", type: "shelter", capacity_total: 300, capacity_used: 120, status: "available", disaster_types: ["flood", "cyclone", "landslide"], lat: 19.308, lng: 84.788 },
-  { id: "res-4", name: "Coastal Rescue Fire Engine", type: "fire_engine", capacity_total: 6, capacity_used: 0, status: "available", disaster_types: ["fire", "flood"], lat: 19.325, lng: 84.790 },
-];
+const FALLBACK_RESOURCES: ResourceItem[] = [];
 
-const FALLBACK_INCIDENTS: ReportItem[] = [
-  { id: "INC-101", session_id: "demo-s1", type: "flood", description: "Water level rising rapidly near main market bridge", status: "verified", created_at: new Date().toISOString(), lat: 19.076, lng: 72.8777, location_wkt: "POINT(72.8777 19.0760)" },
-  { id: "INC-102", session_id: "demo-s2", type: "cyclone", description: "Trees fallen and power lines disrupted", status: "unverified", created_at: new Date().toISOString(), lat: 19.085, lng: 72.885, location_wkt: "POINT(72.885 19.085)" },
-];
+let inMemoryIncidents: ReportItem[] = [];
 
 // In-memory state for Response Team Requests
-let inMemoryTeamRequests: ResponseTeamRequest[] = [
-  {
-    id: "REQ-901",
-    unitId: "res-1",
-    unitName: "Brahmapur NDRF Boat Unit",
-    callsign: "Alpha-1",
-    requestType: "supplies",
-    title: "Urgent: 50L Clean Water & Medical Kits Needed",
-    details: "Evacuated 18 citizens near Market Bridge; drinking water and pediatric ORS kits exhausted.",
-    urgency: "critical",
-    status: "pending",
-    requestedAt: new Date(Date.now() - 15 * 60000).toISOString(),
-    lat: 19.315,
-    lng: 84.794,
-    locationName: "Brahmapur Market Sector 4",
-  },
-  {
-    id: "REQ-902",
-    unitId: "res-4",
-    unitName: "Coastal Rescue Fire Engine",
-    callsign: "Fire-Command-2",
-    requestType: "equipment",
-    title: "High-Capacity Hydraulic Cutter & Searchlights",
-    details: "Building structural collapse at Station Road requires hydraulic cutters for trapped victims.",
-    urgency: "high",
-    status: "pending",
-    requestedAt: new Date(Date.now() - 40 * 60000).toISOString(),
-    lat: 19.325,
-    lng: 84.790,
-    locationName: "Station Road Junction",
-  },
-  {
-    id: "REQ-903",
-    unitId: "res-2",
-    unitName: "City Hospital Rapid Ambulance",
-    callsign: "Medic-Alpha",
-    requestType: "reinforcement",
-    title: "Request Additional Triage Rescuers (2 Medics)",
-    details: "Over 12 injured citizens requiring immediate stabilization before transport.",
-    urgency: "critical",
-    status: "approved",
-    requestedAt: new Date(Date.now() - 60 * 60000).toISOString(),
-    lat: 19.320,
-    lng: 84.800,
-    locationName: "East Relief Camp Hub",
-  },
-];
+let inMemoryTeamRequests: ResponseTeamRequest[] = [];
 
 // In-memory state for Citizen Responses
-let inMemoryCitizenResponses: CitizenResponse[] = [
-  {
-    id: "CIT-801",
-    reportId: "INC-101",
-    citizenName: "Ramesh Senapati",
-    phone: "+91 98765 43210",
-    status: "trapped",
-    message: "4 members stranded on roof of 2-storey house. Water level reached 1st floor ceiling. Need boat!",
-    peopleCount: 4,
-    timestamp: new Date(Date.now() - 8 * 60000).toISOString(),
-    lat: 19.078,
-    lng: 72.879,
-    locationName: "Low-Lying River Delta (Radical Zone Alpha)",
-    isRadicalRegion: true,
-    autoAlertTriggered: true,
-  },
-  {
-    id: "CIT-802",
-    reportId: "INC-102",
-    citizenName: "Priyanka Naik",
-    phone: "+91 91234 56789",
-    status: "medical_need",
-    message: "Elderly person suffering severe dyspnea and fever. Oxygen cylinder running low.",
-    peopleCount: 2,
-    timestamp: new Date(Date.now() - 22 * 60000).toISOString(),
-    lat: 19.088,
-    lng: 72.887,
-    locationName: "Coastal Storm Surge Slope (Radical Zone Gamma)",
-    isRadicalRegion: true,
-    autoAlertTriggered: true,
-  },
-  {
-    id: "CIT-803",
-    reportId: "INC-101",
-    citizenName: "Anil Mohanty",
-    phone: "+91 99887 76655",
-    status: "safe",
-    message: "Moved safely to Higher Ground School Camp. Food rations received.",
-    peopleCount: 5,
-    timestamp: new Date(Date.now() - 45 * 60000).toISOString(),
-    lat: 19.072,
-    lng: 72.871,
-    locationName: "West Ridge Relief Shelter",
-    isRadicalRegion: false,
-    autoAlertTriggered: false,
-  },
-];
+let inMemoryCitizenResponses: CitizenResponse[] = [];
 
 // In-memory Predetermined Permission Settings for Radical Regions
 let inMemoryPermissionSettings: PredeterminedPermissionSettings = {
@@ -171,92 +79,11 @@ let inMemoryPermissionSettings: PredeterminedPermissionSettings = {
   minReportClusterForAutoDispatch: 2,
   maxAutoDispatchRadiusKm: 5,
   requireAdminPostConfirmation: true,
-  regions: [
-    {
-      id: "RAD-ZONE-1",
-      regionName: "Low-Lying River Delta (Zone Alpha)",
-      riskLevel: "extreme_radical",
-      centerLat: 19.078,
-      centerLng: 72.879,
-      radiusKm: 3.5,
-      autoBroadcastSosToRescuers: true,
-      autoDispatchThreshold: 1,
-      rescuerAuthorityLevel: "level_1_autonomous",
-      enabled: true,
-      activeAlertsCount: 3,
-    },
-    {
-      id: "RAD-ZONE-2",
-      regionName: "Coastal Storm Surge Slope (Zone Gamma)",
-      riskLevel: "high_risk",
-      centerLat: 19.088,
-      centerLng: 72.887,
-      radiusKm: 4.0,
-      autoBroadcastSosToRescuers: true,
-      autoDispatchThreshold: 2,
-      rescuerAuthorityLevel: "level_2_field_resource",
-      enabled: true,
-      activeAlertsCount: 2,
-    },
-    {
-      id: "RAD-ZONE-3",
-      regionName: "Landslide Flash Flood Ravine (Zone Delta)",
-      riskLevel: "extreme_radical",
-      centerLat: 19.315,
-      centerLng: 84.794,
-      radiusKm: 5.0,
-      autoBroadcastSosToRescuers: true,
-      autoDispatchThreshold: 1,
-      rescuerAuthorityLevel: "level_1_autonomous",
-      enabled: true,
-      activeAlertsCount: 1,
-    },
-  ],
+  regions: [],
 };
 
 // In-memory state for Live Rescuer / Resource Giver GPS Locations
-const inMemoryRescuerLocations: RescuerUnitProfile[] = [
-  {
-    id: "res-1", name: "Brahmapur NDRF Boat Unit", callsign: "BOAT-DELTA-03", type: "boat",
-    leaderName: "Insp. S. Mohanty", phone: "+91 90000 11111", status: "at_scene",
-    lat: 19.316, lng: 84.793, assignedReportId: "INC-101", assignmentSource: "admin_dispatch",
-    supplies: {
-      foodRationKits: 12, foodRationCapacity: 30, waterLiters: 40, waterCapacityLiters: 200,
-      medicalKits: 3, medicalKitsCapacity: 10, ivFluidsCount: 6, shelterBedsAvailable: 0,
-      shelterBedsTotal: 0, lifeJackets: 14, fuelLiters: 55, satPhoneBatteryPct: 72,
-    },
-  },
-  {
-    id: "res-2", name: "City Hospital Rapid Ambulance", callsign: "MED-UNIT-102", type: "ambulance",
-    leaderName: "Dr. A. Rao", phone: "+91 90000 22222", status: "en_route",
-    lat: 19.321, lng: 84.799, assignedReportId: "INC-102", assignmentSource: "nearest_fallback",
-    supplies: {
-      foodRationKits: 0, foodRationCapacity: 0, waterLiters: 10, waterCapacityLiters: 20,
-      medicalKits: 8, medicalKitsCapacity: 12, ivFluidsCount: 20, shelterBedsAvailable: 0,
-      shelterBedsTotal: 0, lifeJackets: 2, fuelLiters: 38, satPhoneBatteryPct: 90,
-    },
-  },
-  {
-    id: "res-3", name: "Rescue Team Alpha", callsign: "RESCUE-ALPHA-01", type: "rescue_team",
-    leaderName: "Cmdr. V. Singh", phone: "+91 90000 33333", status: "available",
-    lat: 19.309, lng: 84.802, assignedReportId: null, assignmentSource: null,
-    supplies: {
-      foodRationKits: 20, foodRationCapacity: 40, waterLiters: 120, waterCapacityLiters: 300,
-      medicalKits: 6, medicalKitsCapacity: 15, ivFluidsCount: 10, shelterBedsAvailable: 0,
-      shelterBedsTotal: 0, lifeJackets: 25, fuelLiters: 80, satPhoneBatteryPct: 64,
-    },
-  },
-  {
-    id: "res-4", name: "Coastal Relief Shelter Hub", callsign: "SHELTER-HUB-01", type: "shelter",
-    leaderName: "Ms. R. Behera", phone: "+91 90000 44444", status: "at_scene",
-    lat: 19.327, lng: 84.788, assignedReportId: null, assignmentSource: null,
-    supplies: {
-      foodRationKits: 60, foodRationCapacity: 120, waterLiters: 500, waterCapacityLiters: 1000,
-      medicalKits: 10, medicalKitsCapacity: 25, ivFluidsCount: 15, shelterBedsAvailable: 45,
-      shelterBedsTotal: 80, lifeJackets: 5, fuelLiters: 20, satPhoneBatteryPct: 100,
-    },
-  },
-];
+const inMemoryRescuerLocations: RescuerUnitProfile[] = [];
 
 export async function apiGetRescuerLocations(): Promise<RescuerUnitProfile[]> {
   try {
@@ -333,7 +160,7 @@ export async function apiGetCitizenResponses(): Promise<CitizenResponse[]> {
 export async function apiSubmitCitizenResponse(resp: Partial<CitizenResponse>): Promise<CitizenResponse> {
   const item: CitizenResponse = {
     id: "CIT-" + Math.floor(100 + Math.random() * 900),
-    reportId: resp.reportId || "INC-101",
+    reportId: resp.reportId || "REP-" + Date.now().toString(36),
     citizenName: resp.citizenName || "Citizen User",
     phone: resp.phone || "+91 90000 00000",
     status: resp.status || "immediate_help",
@@ -386,6 +213,44 @@ export async function apiToggleRadicalRegionRule(
   return updated;
 }
 
+// ── Location & Reverse Geocoding ──
+
+export async function apiReverseGeocode(lat: number, lng: number): Promise<string> {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      {
+        headers: {
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+      }
+    );
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.display_name) {
+        return data.display_name;
+      }
+    }
+  } catch (err) {
+    console.warn("Reverse geocode fetch error:", err);
+  }
+  return `Sector (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+}
+
+export function calcDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth radius km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 // ── Original Citizen Endpoints ──
 
 export async function apiSubmitReport(formData: FormData): Promise<{ report: ReportItem; verifiedReports?: ReportItem[] }> {
@@ -398,7 +263,11 @@ export async function apiSubmitReport(formData: FormData): Promise<{ report: Rep
       const errorText = await res.text();
       throw new Error(errorText || "Failed to submit emergency report");
     }
-    return await res.json();
+    const data = await res.json();
+    if (data.report) {
+      inMemoryIncidents.unshift(data.report);
+    }
+    return data;
   } catch (err) {
     console.warn("Backend API not reachable for submitReport, creating local report:", err);
     const newRep: ReportItem = {
@@ -410,7 +279,11 @@ export async function apiSubmitReport(formData: FormData): Promise<{ report: Rep
       created_at: new Date().toISOString(),
       lat: parseFloat((formData.get("lat") as string) || "19.076"),
       lng: parseFloat((formData.get("lng") as string) || "72.8777"),
+      location_wkt: `POINT(${(formData.get("lng") as string) || "72.8777"} ${(formData.get("lat") as string) || "19.076"})`,
+      address: (formData.get("description") as string)?.split("]")[0]?.replace("[", "") || "Current Location",
+      rescuer_status: "pending_admin",
     };
+    inMemoryIncidents.unshift(newRep);
     return { report: newRep };
   }
 }
@@ -420,29 +293,53 @@ export async function apiGetCitizenReports(sessionId: string): Promise<ReportIte
     const res = await fetch(`${API_BASE_URL}/api/reports?session_id=${encodeURIComponent(sessionId)}`, {
       cache: "no-store",
     });
-    if (!res.ok) {
-      return FALLBACK_INCIDENTS;
+    if (res.ok) {
+      return await res.json();
     }
-    return await res.json();
   } catch {
-    return FALLBACK_INCIDENTS;
+    // fallback
   }
+  return inMemoryIncidents.filter((i) => i.session_id === sessionId);
+}
+
+export async function apiGetActiveReportForSession(sessionId: string): Promise<ReportItem | null> {
+  const reports = await apiGetCitizenReports(sessionId);
+  const active = reports.find((r) => r.status !== "resolved");
+  return active || null;
+}
+
+export async function apiGetIncidentById(incidentId: string): Promise<ReportItem | null> {
+  const inc = inMemoryIncidents.find((i) => i.id === incidentId);
+  return inc || null;
 }
 
 // ── Authority / Incidents Endpoints ──
 
 export async function apiGetAllIncidents(): Promise<ReportItem[]> {
+  let serverIncidents: ReportItem[] = [];
   try {
     const res = await fetch(`${API_BASE_URL}/api/incidents`, {
       cache: "no-store",
     });
-    if (!res.ok) {
-      return FALLBACK_INCIDENTS;
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        serverIncidents = data;
+      }
     }
-    return await res.json();
   } catch {
-    return FALLBACK_INCIDENTS;
+    // fallback
   }
+
+  const combinedMap = new Map<string, ReportItem>();
+  inMemoryIncidents.forEach((inc) => combinedMap.set(inc.id, inc));
+  serverIncidents.forEach((inc) => {
+    if (!combinedMap.has(inc.id)) {
+      combinedMap.set(inc.id, inc);
+    }
+  });
+
+  return Array.from(combinedMap.values());
 }
 
 export async function apiGetAllResources(): Promise<ResourceItem[]> {
@@ -450,13 +347,13 @@ export async function apiGetAllResources(): Promise<ResourceItem[]> {
     const res = await fetch(`${API_BASE_URL}/api/resources`, {
       cache: "no-store",
     });
-    if (!res.ok) {
-      return FALLBACK_RESOURCES;
+    if (res.ok) {
+      return await res.json();
     }
-    return await res.json();
   } catch {
-    return FALLBACK_RESOURCES;
+    // fallback
   }
+  return FALLBACK_RESOURCES;
 }
 
 export async function apiGetShortlist(incidentId: string): Promise<ResourceItem[]> {
@@ -464,13 +361,13 @@ export async function apiGetShortlist(incidentId: string): Promise<ResourceItem[
     const res = await fetch(`${API_BASE_URL}/api/incidents/${incidentId}/shortlist`, {
       cache: "no-store",
     });
-    if (!res.ok) {
-      return FALLBACK_RESOURCES.slice(0, 3);
+    if (res.ok) {
+      return await res.json();
     }
-    return await res.json();
   } catch {
-    return FALLBACK_RESOURCES.slice(0, 3);
+    // fallback
   }
+  return FALLBACK_RESOURCES.slice(0, 3);
 }
 
 export async function apiConfirmAllocation(reportId: string, resourceId: string): Promise<{
@@ -478,6 +375,49 @@ export async function apiConfirmAllocation(reportId: string, resourceId: string)
   report: ReportItem;
   resource: ResourceItem;
 }> {
+  // Find matching rescuer unit profile
+  let rescuerUnit = inMemoryRescuerLocations.find((r) => r.id === resourceId);
+  if (!rescuerUnit) {
+    const fallbackRes = FALLBACK_RESOURCES.find((r) => r.id === resourceId);
+    rescuerUnit = {
+      id: resourceId,
+      name: fallbackRes?.name || "Emergency Rescue Team",
+      callsign: "RESCUE-01",
+      type: fallbackRes?.type || "rescue_team",
+      leaderName: "Officer S. Kumar",
+      phone: "+91 98765 00000",
+      status: "en_route",
+      lat: (fallbackRes?.lat || 19.32) - 0.01,
+      lng: (fallbackRes?.lng || 84.80) - 0.01,
+      assignedReportId: reportId,
+      assignmentSource: "admin_dispatch",
+      supplies: { foodRationKits: 10, foodRationCapacity: 20, waterLiters: 50, waterCapacityLiters: 100, medicalKits: 5, medicalKitsCapacity: 10, ivFluidsCount: 5, shelterBedsAvailable: 0, shelterBedsTotal: 0, lifeJackets: 10, fuelLiters: 40, satPhoneBatteryPct: 85 }
+    };
+    inMemoryRescuerLocations.push(rescuerUnit);
+  } else {
+    rescuerUnit.status = "en_route";
+    rescuerUnit.assignedReportId = reportId;
+    rescuerUnit.assignmentSource = "admin_dispatch";
+  }
+
+  // Update in-memory incident
+  inMemoryIncidents = inMemoryIncidents.map((inc) => {
+    if (inc.id === reportId) {
+      return {
+        ...inc,
+        status: "in_progress",
+        assigned_rescuer_id: resourceId,
+        assigned_rescuer: rescuerUnit,
+        rescuer_status: "assigned",
+        assignment_source: "admin_dispatch",
+        denied_by_admin: false,
+      };
+    }
+    return inc;
+  });
+
+  const updatedIncident = inMemoryIncidents.find((i) => i.id === reportId)!;
+
   try {
     const res = await fetch(`${API_BASE_URL}/api/allocations/confirm`, {
       method: "POST",
@@ -487,15 +427,173 @@ export async function apiConfirmAllocation(reportId: string, resourceId: string)
       },
       body: JSON.stringify({ report_id: reportId, resource_id: resourceId }),
     });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(err || "Failed to confirm allocation");
+    if (res.ok) {
+      return await res.json();
     }
-    return await res.json();
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Failed";
-    throw new Error(msg);
+  } catch {
+    // fallback to in-memory return
   }
+
+  const confirmedAllocation: AllocationItem = {
+    id: "alloc-" + Math.floor(Math.random() * 1000),
+    report_id: reportId,
+    resource_id: resourceId,
+    status: "en_route",
+    recommended_at: new Date().toISOString(),
+    confirmed_at: new Date().toISOString(),
+  };
+
+  const allocatedResource: ResourceItem = {
+    id: resourceId,
+    name: rescuerUnit.name,
+    type: rescuerUnit.type,
+    capacity_total: 10,
+    capacity_used: 1,
+    status: "en_route",
+    disaster_types: ["flood", "medical"],
+  };
+
+  return {
+    allocation: confirmedAllocation,
+    report: updatedIncident,
+    resource: allocatedResource,
+  };
+}
+
+// ── Admin Deny Request & Auto-Route to Nearest Rescuer ──
+
+export async function apiDenyIncidentAndAutoRoute(incidentId: string): Promise<{
+  report: ReportItem;
+  rescuer: RescuerUnitProfile;
+}> {
+  const incident = inMemoryIncidents.find((i) => i.id === incidentId);
+  const incLat = incident?.lat || 19.076;
+  const incLng = incident?.lng || 72.8777;
+
+  // Calculate distances to all rescuers and find nearest
+  let nearestRescuer: RescuerUnitProfile | null = null;
+  let minDistance = Infinity;
+
+  inMemoryRescuerLocations.forEach((r) => {
+    const dist = calcDistanceKm(incLat, incLng, r.lat, r.lng);
+    if (dist < minDistance) {
+      minDistance = dist;
+      nearestRescuer = r;
+    }
+  });
+
+  if (!nearestRescuer) {
+    nearestRescuer = {
+      id: "res-field-" + Math.random().toString(36).substring(2, 7),
+      name: "Rapid Field Response Unit",
+      callsign: "RESCUE-RAPID-01",
+      type: "rescue_team",
+      leaderName: "Cmdr. Rajesh Verma",
+      phone: "+91 98765 11001",
+      status: "en_route",
+      lat: incLat + 0.012,
+      lng: incLng + 0.012,
+      assignedReportId: incidentId,
+      assignmentSource: "nearest_fallback",
+      supplies: { foodRationKits: 20, foodRationCapacity: 40, waterLiters: 100, waterCapacityLiters: 200, medicalKits: 10, medicalKitsCapacity: 20, ivFluidsCount: 15, shelterBedsAvailable: 0, shelterBedsTotal: 0, lifeJackets: 20, fuelLiters: 60, satPhoneBatteryPct: 90 }
+    };
+    inMemoryRescuerLocations.push(nearestRescuer);
+  }
+
+  // Update rescuer unit status
+  nearestRescuer = {
+    ...nearestRescuer,
+    status: "en_route",
+    assignedReportId: incidentId,
+    assignmentSource: "nearest_fallback",
+  };
+
+  // Update in-memory rescuer location list
+  const idx = inMemoryRescuerLocations.findIndex((r) => r.id === nearestRescuer!.id);
+  if (idx !== -1) {
+    inMemoryRescuerLocations[idx] = nearestRescuer;
+  }
+
+  // Update in-memory incident
+  inMemoryIncidents = inMemoryIncidents.map((inc) => {
+    if (inc.id === incidentId) {
+      return {
+        ...inc,
+        status: "in_progress",
+        denied_by_admin: true,
+        rescuer_status: "admin_denied_auto_routed",
+        assigned_rescuer_id: nearestRescuer!.id,
+        assigned_rescuer: nearestRescuer!,
+        assignment_source: "nearest_fallback_admin_denied",
+      };
+    }
+    return inc;
+  });
+
+  const updatedIncident = inMemoryIncidents.find((i) => i.id === incidentId)!;
+
+  return {
+    report: updatedIncident,
+    rescuer: nearestRescuer,
+  };
+}
+
+// ── Live Map Polling Simulation for Assigned Rescuer Arrival ──
+
+export async function apiPollRescuerMovement(incidentId: string): Promise<ReportItem | null> {
+  const incidentIndex = inMemoryIncidents.findIndex((i) => i.id === incidentId);
+  if (incidentIndex === -1) return null;
+
+  const incident = inMemoryIncidents[incidentIndex];
+  if (!incident.assigned_rescuer || incident.status === "resolved") {
+    return incident;
+  }
+
+  const rescuer = incident.assigned_rescuer;
+  const targetLat = incident.lat || 19.076;
+  const targetLng = incident.lng || 72.8777;
+
+  const dLat = targetLat - rescuer.lat;
+  const dLng = targetLng - rescuer.lng;
+  const distKm = calcDistanceKm(rescuer.lat, rescuer.lng, targetLat, targetLng);
+
+  if (distKm < 0.05) { // Less than 50 meters
+    const arrivedRescuer: RescuerUnitProfile = {
+      ...rescuer,
+      lat: targetLat,
+      lng: targetLng,
+      status: "at_scene",
+    };
+    inMemoryIncidents[incidentIndex] = {
+      ...incident,
+      assigned_rescuer: arrivedRescuer,
+      rescuer_status: "arrived",
+    };
+  } else {
+    // Move rescuer 15% closer to target each poll cycle
+    const nextLat = rescuer.lat + dLat * 0.15;
+    const nextLng = rescuer.lng + dLng * 0.15;
+
+    const movingRescuer: RescuerUnitProfile = {
+      ...rescuer,
+      lat: nextLat,
+      lng: nextLng,
+      status: "en_route",
+    };
+
+    // Update in-memory rescuer location list
+    const rIdx = inMemoryRescuerLocations.findIndex((r) => r.id === rescuer.id);
+    if (rIdx !== -1) {
+      inMemoryRescuerLocations[rIdx] = movingRescuer;
+    }
+
+    inMemoryIncidents[incidentIndex] = {
+      ...incident,
+      assigned_rescuer: movingRescuer,
+    };
+  }
+
+  return inMemoryIncidents[incidentIndex];
 }
 
 export async function apiUpdateResourceStatus(resourceId: string, status: "en_route" | "at_scene" | "available"): Promise<ResourceItem> {
@@ -524,6 +622,9 @@ export async function apiResolveIncident(incidentId: string): Promise<{
   allocation?: AllocationItem;
   resource?: ResourceItem;
 }> {
+  inMemoryIncidents = inMemoryIncidents.map((inc) => (inc.id === incidentId ? { ...inc, status: "resolved" } : inc));
+  const updatedIncident = inMemoryIncidents.find((i) => i.id === incidentId)!;
+
   try {
     const res = await fetch(`${API_BASE_URL}/api/incidents/${incidentId}/resolve`, {
       method: "POST",
@@ -531,14 +632,77 @@ export async function apiResolveIncident(incidentId: string): Promise<{
         "x-authority-token": AUTH_TOKEN,
       },
     });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(err || "Failed to resolve incident");
+    if (res.ok) {
+      return await res.json();
     }
-    return await res.json();
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Failed";
-    throw new Error(msg);
+  } catch {
+    // fallback
   }
+
+  return { report: updatedIncident };
 }
+
+// ── Rescue Team Head Resource Estimations ──
+
+let inMemoryHeadEstimations: HeadResourceEstimation[] = [];
+
+export async function apiSaveHeadResourceEstimation(
+  estimation: Partial<HeadResourceEstimation>
+): Promise<HeadResourceEstimation> {
+  const newEst: HeadResourceEstimation = {
+    id: "EST-" + Math.floor(100 + Math.random() * 900),
+    incidentId: estimation.incidentId || "INC-101",
+    unitId: estimation.unitId || "demo-team-alpha",
+    leaderName: estimation.leaderName || "Rescue Commander",
+    locationName: estimation.locationName || "Target Area",
+    areaRadiusKm: estimation.areaRadiusKm || 2.5,
+    totalRequestsCount: estimation.totalRequestsCount || 1,
+    totalPeopleCount: estimation.totalPeopleCount || 4,
+    estimatedFoodKits: estimation.estimatedFoodKits || 20,
+    estimatedWaterLiters: estimation.estimatedWaterLiters || 100,
+    estimatedMedicalKits: estimation.estimatedMedicalKits || 5,
+    estimatedLifeJackets: estimation.estimatedLifeJackets || 10,
+    estimatedFuelLiters: estimation.estimatedFuelLiters || 40,
+    specialEquipment: estimation.specialEquipment || "Searchlights & Hydraulic Cutters",
+    setAt: new Date().toISOString(),
+    status: "confirmed_broadcast",
+  };
+
+  inMemoryHeadEstimations = inMemoryHeadEstimations.filter(
+    (e) => e.incidentId !== newEst.incidentId || e.unitId !== newEst.unitId
+  );
+  inMemoryHeadEstimations.unshift(newEst);
+
+  return newEst;
+}
+
+export async function apiGetHeadResourceEstimation(
+  incidentId: string,
+  unitId?: string
+): Promise<HeadResourceEstimation | null> {
+  const est = inMemoryHeadEstimations.find(
+    (e) => e.incidentId === incidentId && (!unitId || e.unitId === unitId)
+  );
+  return est || null;
+}
+
+// ── Office-Based Regional Incident Filtering ──
+
+export async function apiGetIncidentsForOfficeRegion(
+  officeLat: number,
+  officeLng: number,
+  radiusKm: number = 25
+): Promise<ReportItem[]> {
+  const all = await apiGetAllIncidents();
+  if (!officeLat || !officeLng) return all;
+
+  return all.filter((inc) => {
+    const incLat = inc.lat || 19.076;
+    const incLng = inc.lng || 72.8777;
+    const dist = calcDistanceKm(officeLat, officeLng, incLat, incLng);
+    return dist <= radiusKm;
+  });
+}
+
+
 

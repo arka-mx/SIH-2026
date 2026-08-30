@@ -83,3 +83,22 @@ export interface PredeterminedPermissionSettings {
   regions: RadicalRegionRule[];
 }
 
+export interface HeadResourceEstimation {
+  id: string;
+  incidentId: string;
+  unitId: string;
+  leaderName: string;
+  locationName: string;
+  areaRadiusKm: number;
+  totalRequestsCount: number;
+  totalPeopleCount: number;
+  estimatedFoodKits: number;
+  estimatedWaterLiters: number;
+  estimatedMedicalKits: number;
+  estimatedLifeJackets: number;
+  estimatedFuelLiters: number;
+  specialEquipment: string;
+  setAt: string;
+  status: "draft" | "confirmed_broadcast";
+}
+

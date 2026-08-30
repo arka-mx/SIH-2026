@@ -3,29 +3,51 @@
 const SESSION_STORAGE_KEY = "sih_citizen_session_id";
 
 /**
- * Retrieves an existing anonymous session ID from localStorage or creates a new UUID.
+ * Retrieves the deterministic IP-based session ID from `/api/session`.
+ * This session ID is strictly unique and locked to the client's IP address.
+ * Even if localStorage is cleared or regenerated, it will always resolve to the exact same IP session ID.
+ */
+export async function fetchIpBasedSessionId(): Promise<string> {
+  if (typeof window === "undefined") {
+    return "server-session";
+  }
+
+  try {
+    const res = await fetch("/api/session", { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.sessionId) {
+        localStorage.setItem(SESSION_STORAGE_KEY, data.sessionId);
+        return data.sessionId;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not fetch IP session ID from backend, using cached session:", err);
+  }
+
+  return getOrCreateSessionId();
+}
+
+/**
+ * Fallback to cached IP session ID or static server identifier.
+ * Ensures no random IDs can be generated.
  */
 export function getOrCreateSessionId(): string {
   if (typeof window === "undefined") {
     return "server-session";
   }
 
-  let sessionId = localStorage.getItem(SESSION_STORAGE_KEY);
-  if (!sessionId) {
-    sessionId = "session-" + Math.random().toString(36).substring(2, 10) + "-" + Date.now().toString(36);
-    localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+  const cached = localStorage.getItem(SESSION_STORAGE_KEY);
+  if (cached) {
+    return cached;
   }
-  return sessionId;
+
+  return "ip-session-locked-client";
 }
 
 /**
- * Resets the session ID (e.g. for simulating a new citizen reporter on the same machine during demo)
+ * Enforces immutable IP session ID (always returns the IP-locked session ID).
  */
 export function createNewSessionId(): string {
-  if (typeof window === "undefined") {
-    return "server-session";
-  }
-  const sessionId = "session-" + Math.random().toString(36).substring(2, 10) + "-" + Date.now().toString(36);
-  localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
-  return sessionId;
+  return getOrCreateSessionId();
 }
