@@ -66,6 +66,20 @@ function createGeoJSONCircle(centerLng: number, centerLat: number, radiusInKm: n
   };
 }
 
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export function LiveMap({
   incidents = [],
   resources = [],
@@ -80,6 +94,7 @@ export function LiveMap({
   const [activeStyle, setActiveStyle] = useState<string>("liberty");
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
   const [layers, setLayers] = useState({ incidents: true, teams: true, zones: true });
+  const [nearestMatch, setNearestMatch] = useState<{ name: string; type: string; distance: number } | null>(null);
 
   // 1. Dynamically Load MapLibre GL JS CSS & Script from CDN
   useEffect(() => {
@@ -371,6 +386,107 @@ export function LiveMap({
         markersRef.current.push(marker);
       });
 
+      // C3. Calculate Nearest Available Resource and render dashed line
+      const selectedInc = selectedIncidentId ? incidents.find((i) => i.id === selectedIncidentId) : null;
+      let selectedLat: number | undefined;
+      let selectedLng: number | undefined;
+
+      if (selectedInc) {
+        selectedLat = selectedInc.lat;
+        selectedLng = selectedInc.lng;
+        if ((selectedLat === undefined || selectedLng === undefined) && selectedInc.location_wkt) {
+          const match = selectedInc.location_wkt.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
+          if (match) {
+            selectedLng = parseFloat(match[1]);
+            selectedLat = parseFloat(match[2]);
+          }
+        }
+      }
+
+      const lineSourceId = "allocation-line-source";
+      const lineLayerId = "allocation-line-layer";
+
+      let matched: { name: string; type: string; lat: number; lng: number; distance: number } | null = null;
+
+      if (selectedInc && selectedLat !== undefined && selectedLng !== undefined && !isNaN(selectedLat) && !isNaN(selectedLng)) {
+        let minDistance = Infinity;
+
+        // Check Shelters / Supply Centres
+        for (const res of resources) {
+          let resLat = res.lat;
+          let resLng = res.lng;
+          if ((resLat === undefined || resLng === undefined) && res.location_wkt) {
+            const match = res.location_wkt.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
+            if (match) {
+              resLng = parseFloat(match[1]);
+              resLat = parseFloat(match[2]);
+            }
+          }
+          if (resLat === undefined || resLng === undefined || isNaN(resLat) || isNaN(resLng)) continue;
+          
+          const availableCap = (res.capacity_total || 0) - (res.capacity_used || 0);
+          if (availableCap <= 0) continue; // Full capacity shelter
+
+          const dist = getDistance(selectedLat!, selectedLng!, resLat, resLng);
+          if (dist < minDistance) {
+            minDistance = dist;
+            matched = { name: res.name, type: res.type, lat: resLat, lng: resLng, distance: dist };
+          }
+        }
+
+        // Check Rescuer units
+        for (const resc of rescuers) {
+          if (resc.status !== "available" || resc.lat === undefined || resc.lng === undefined || isNaN(resc.lat) || isNaN(resc.lng)) continue;
+          const dist = getDistance(selectedLat!, selectedLng!, resc.lat, resc.lng);
+          if (dist < minDistance) {
+            minDistance = dist;
+            matched = { name: resc.callsign || resc.name, type: resc.type, lat: resc.lat, lng: resc.lng, distance: dist };
+          }
+        }
+
+        if (matched) {
+          const lineGeoJSON = {
+            type: "Feature",
+            properties: {},
+            geometry: {
+              type: "LineString",
+              coordinates: [
+                [selectedLng, selectedLat],
+                [matched.lng, matched.lat],
+              ],
+            },
+          };
+
+          if (map.getSource(lineSourceId)) {
+            (map.getSource(lineSourceId) as any).setData(lineGeoJSON);
+          } else {
+            map.addSource(lineSourceId, {
+              type: "geojson",
+              data: lineGeoJSON,
+            });
+            map.addLayer({
+              id: lineLayerId,
+              type: "line",
+              source: lineSourceId,
+              paint: {
+                "line-color": "#d96d25", // Orange/Saffron matching vector
+                "line-width": 3,
+                "line-dasharray": [3, 2],
+              },
+            });
+          }
+          setNearestMatch(matched);
+        } else {
+          if (map.getLayer(lineLayerId)) map.removeLayer(lineLayerId);
+          if (map.getSource(lineSourceId)) map.removeSource(lineSourceId);
+          setNearestMatch(null);
+        }
+      } else {
+        if (map.getLayer(lineLayerId)) map.removeLayer(lineLayerId);
+        if (map.getSource(lineSourceId)) map.removeSource(lineSourceId);
+        setNearestMatch(null);
+      }
+
       // D. Fit bounds if points exist
       if (bounds.length > 0) {
         try {
@@ -498,6 +614,38 @@ export function LiveMap({
           </button>
         ))}
       </div>
+
+      {/* Floating Nearest Resource Recommendation Card */}
+      {nearestMatch && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "20px",
+            left: "20px",
+            zIndex: 10,
+            background: "rgba(255, 253, 246, 0.95)",
+            border: "1px solid #eadaab",
+            padding: "12px 14px",
+            borderRadius: "12px",
+            boxShadow: "0 4px 12px rgba(104,70,42,0.15)",
+            maxWidth: "280px",
+            color: "#3c2415"
+          }}
+        >
+          <span style={{ fontSize: "9px", color: "#d96d25", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            🤖 AI AUTO-ALLOCATOR RECOMMENDATION
+          </span>
+          <div style={{ fontSize: "12px", fontWeight: "bold", marginTop: "3px", textTransform: "capitalize" }}>
+            {nearestMatch.name}
+          </div>
+          <div style={{ fontSize: "10px", color: "#665548", marginTop: "2px" }}>
+            Type: <span style={{ textTransform: "capitalize", fontWeight: "600" }}>{nearestMatch.type.replace("_", " ")}</span> · Distance: <b>{nearestMatch.distance.toFixed(2)} km</b>
+          </div>
+          <div style={{ fontSize: "10px", color: "#254b34", background: "#d7ebc9", padding: "3px 6px", borderRadius: "4px", marginTop: "6px", fontWeight: "bold", display: "inline-block" }}>
+            ✓ Closest Available Rescuer/Camp
+          </div>
+        </div>
+      )}
 
       <div
         ref={mapContainerRef}

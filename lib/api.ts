@@ -131,6 +131,7 @@ let inMemoryCitizenResponses: CitizenResponse[] = [
     locationName: "Low-Lying River Delta (Radical Zone Alpha)",
     isRadicalRegion: true,
     autoAlertTriggered: true,
+    channel: "sms",
   },
   {
     id: "CIT-802",
@@ -146,6 +147,7 @@ let inMemoryCitizenResponses: CitizenResponse[] = [
     locationName: "Coastal Storm Surge Slope (Radical Zone Gamma)",
     isRadicalRegion: true,
     autoAlertTriggered: true,
+    channel: "ivr",
   },
   {
     id: "CIT-803",
@@ -161,6 +163,7 @@ let inMemoryCitizenResponses: CitizenResponse[] = [
     locationName: "West Ridge Relief Shelter",
     isRadicalRegion: false,
     autoAlertTriggered: false,
+    channel: "web",
   },
 ];
 
@@ -345,6 +348,7 @@ export async function apiSubmitCitizenResponse(resp: Partial<CitizenResponse>): 
     locationName: resp.locationName || "Target Location",
     isRadicalRegion: resp.isRadicalRegion || true,
     autoAlertTriggered: resp.autoAlertTriggered || true,
+    channel: resp.channel || "web",
   };
   inMemoryCitizenResponses.unshift(item);
   return item;

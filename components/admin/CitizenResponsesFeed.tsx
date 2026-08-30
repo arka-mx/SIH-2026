@@ -139,8 +139,23 @@ export function CitizenResponsesFeed({ responses }: CitizenResponsesFeedProps) {
                   </div>
                 </div>
 
-                <div className="shrink-0 flex items-center gap-2">
+                <div className="shrink-0 flex flex-col items-end gap-1.5">
                   {getStatusBadge(item.status)}
+                  {item.channel === "sms" && (
+                    <span className="bg-green-50 text-green-700 border border-green-200 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                      📶 SMS Fallback
+                    </span>
+                  )}
+                  {item.channel === "ivr" && (
+                    <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                      📞 IVR Gateway
+                    </span>
+                  )}
+                  {(!item.channel || item.channel === "web") && (
+                    <span className="bg-stone-50 text-stone-600 border border-stone-200 text-[10px] font-medium px-2 py-0.5 rounded flex items-center gap-1">
+                      🌐 Web Portal
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
