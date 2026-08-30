@@ -1,10 +1,11 @@
-import mongoose from "mongoose";
+let mongoose: any;
+try {
+  mongoose = require("mongoose");
+} catch {
+  mongoose = null;
+}
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/momentum";
-
-if (!MONGODB_URI) {
-  throw new Error("Please define the MONGODB_URI environment variable inside .env");
-}
 
 let cached = (global as any).mongoose;
 
@@ -13,6 +14,9 @@ if (!cached) {
 }
 
 export async function connectToDatabase() {
+  if (!mongoose) {
+    throw new Error("Mongoose dependency offline");
+  }
   if (cached.conn) {
     return cached.conn;
   }
@@ -22,7 +26,7 @@ export async function connectToDatabase() {
       bufferCommands: false,
     };
 
-    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongooseInstance) => {
+    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongooseInstance: any) => {
       return mongooseInstance;
     });
   }

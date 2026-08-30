@@ -12,9 +12,11 @@ import {
   ChevronUp, 
   Radio, 
   Users, 
-  ExternalLink 
+  ExternalLink,
+  XCircle,
+  Zap
 } from "lucide-react";
-import { ReportItem, ResourceItem, apiGetShortlist, apiConfirmAllocation, apiResolveIncident, apiUpdateResourceStatus } from "@/lib/api";
+import { ReportItem, ResourceItem, apiGetShortlist, apiConfirmAllocation, apiResolveIncident, apiUpdateResourceStatus, apiDenyIncidentAndAutoRoute } from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 
 interface IncidentCardProps {
@@ -92,6 +94,22 @@ export function IncidentCard({
     }
   }
 
+  async function handleDenyAndAutoRoute() {
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const res = await apiDenyIncidentAndAutoRoute(incident.id);
+      setActionSuccess(`Admin Denied → Auto-routed to nearest rescuer: ${res.rescuer.name} (${res.rescuer.callsign})`);
+      setShowShortlist(false);
+      if (onUpdate) onUpdate();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to deny and auto-route request";
+      setActionError(msg);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   function getStatusTone(status: string): "amber" | "green" | "red" | "neutral" {
     if (status === "verified") return "green";
     if (status === "in_progress") return "neutral";
@@ -108,13 +126,19 @@ export function IncidentCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="mb-1 flex items-center gap-2">
+          <div className="mb-1 flex items-center gap-2 flex-wrap">
             <span className="text-sm font-bold text-stone-900 capitalize flex items-center gap-1.5">
               {incident.type} Incident
             </span>
             <Badge tone={getStatusTone(incident.status)}>
               {incident.status === "verified" ? "✓ Verified" : incident.status}
             </Badge>
+
+            {incident.denied_by_admin && (
+              <span className="bg-purple-100 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-purple-300 flex items-center gap-1">
+                <Zap size={11} className="text-purple-600" /> Auto-Routed (Admin Denied)
+              </span>
+            )}
           </div>
           <p className="flex items-center gap-1 text-xs text-stone-500">
             <MapPin size={13} className="text-stone-400" />
@@ -160,28 +184,30 @@ export function IncidentCard({
           {new Date(incident.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </span>
 
-        <div className="flex gap-1.5">
-          {isUnverified && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); handleLoadShortlist(); }}
-              disabled={loadingShortlist}
-              className="action-button text-xs"
-            >
-              Preview Shortlist
-            </button>
-          )}
+        <div className="flex flex-wrap gap-1.5">
+          {(isUnverified || isVerified) && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleLoadShortlist(); }}
+                disabled={loadingShortlist || actionLoading}
+                className="action-button primary text-xs !bg-emerald-600 hover:!bg-emerald-700 flex items-center gap-1"
+              >
+                <Sparkles size={13} />
+                {showShortlist ? "Hide Shortlist" : "Assign Rescuer"}
+              </button>
 
-          {isVerified && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); handleLoadShortlist(); }}
-              disabled={loadingShortlist}
-              className="action-button primary text-xs !bg-emerald-600 hover:!bg-emerald-700 flex items-center gap-1"
-            >
-              <Sparkles size={13} />
-              {showShortlist ? "Hide Shortlist" : "View Shortlist & Dispatch"}
-            </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleDenyAndAutoRoute(); }}
+                disabled={actionLoading}
+                className="action-button text-xs !bg-rose-50 text-rose-700 border-rose-300 hover:!bg-rose-100 flex items-center gap-1 font-bold"
+                title="Deny request and automatically route directly to nearest available rescuer"
+              >
+                <XCircle size={13} className="text-rose-600" />
+                Deny Request (Auto-Route)
+              </button>
+            </>
           )}
 
           {isInProgress && (

@@ -1,13 +1,16 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import Link from "next/link";
+import { RescueHeadResourceEstimator } from "@/components/rescuer/RescueHeadResourceEstimator";
 import { RescuerShell } from "@/components/rescuer/RescuerShell";
 import { SupplyTracker } from "@/components/rescuer/SupplyTracker";
 import { DisasterAssignmentCard } from "@/components/rescuer/DisasterAssignmentCard";
 import { IncidentMap } from "@/components/incidents/IncidentMap";
-import { apiGetAllIncidents, ReportItem } from "@/lib/api";
+import { apiGetAllIncidents, apiGetIncidentsForOfficeRegion, ReportItem } from "@/lib/api";
+import { getRescuerSession, RescuerUserSession } from "@/lib/rescuerAuth";
 import { RescuerSupply, RescuerUnitProfile } from "@/types/rescuer";
-import { ShieldCheck, Truck, RotateCw, MapPin, Activity, Flame, Radio } from "lucide-react";
+import { ShieldCheck, Truck, RotateCw, MapPin, Activity, Flame, Radio, Award, LogIn, Globe } from "lucide-react";
 
 // Mock Rescuer Database mapping
 const INITIAL_RESCUER_PROFILES: Record<string, RescuerUnitProfile> = {
@@ -121,6 +124,8 @@ export default function RescuerDetailPage({
   const resolvedParams = use(params);
   const rescuerId = resolvedParams.id || "demo-team-alpha";
 
+  const [session, setSession] = useState<RescuerUserSession | null>(null);
+
   const [profile, setProfile] = useState<RescuerUnitProfile>(
     INITIAL_RESCUER_PROFILES[rescuerId] || INITIAL_RESCUER_PROFILES["demo-team-alpha"]
   );
@@ -129,13 +134,27 @@ export default function RescuerDetailPage({
   const [assignedIncident, setAssignedIncident] = useState<ReportItem | null>(null);
   const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    const userSession = getRescuerSession();
+    setSession(userSession);
+  }, []);
+
   async function loadData() {
     try {
       setLoading(true);
-      const data = await apiGetAllIncidents();
+      const userSession = getRescuerSession();
+      let data: ReportItem[];
+      if (userSession && userSession.officeLat && userSession.officeLng) {
+        data = await apiGetIncidentsForOfficeRegion(
+          userSession.officeLat,
+          userSession.officeLng,
+          userSession.regionRadiusKm || 25
+        );
+      } else {
+        data = await apiGetAllIncidents();
+      }
       setIncidents(data);
 
-      // Default assigned incident if available
       const verifiedInc = data.find((i) => i.status === "verified" || i.status === "in_progress");
       if (verifiedInc) {
         setAssignedIncident(verifiedInc);
@@ -148,7 +167,6 @@ export default function RescuerDetailPage({
   }
 
   useEffect(() => {
-    // Reset profile when URL param changes
     setProfile(INITIAL_RESCUER_PROFILES[rescuerId] || INITIAL_RESCUER_PROFILES["demo-team-alpha"]);
     loadData();
   }, [rescuerId]);
@@ -179,33 +197,62 @@ export default function RescuerDetailPage({
       rescuerName={profile.name}
       status={profile.status}
     >
-      {/* Rescuer Unit Overview Banner */}
-      <div className="bg-stone-900 text-white rounded-2xl p-5 shadow-md flex items-center justify-between flex-wrap gap-4 border border-stone-800">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
+      {/* Google Auth & Regional Office Session Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-5 shadow-md flex items-center justify-between flex-wrap gap-4 border border-indigo-800">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs bg-emerald-500/20 text-emerald-300 font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/30">
               {profile.callsign}
             </span>
-            <span className="text-xs text-stone-400 capitalize">• {profile.type.replace("_", " ")}</span>
+            
+            {session?.isTeamHead ? (
+              <span className="text-xs bg-purple-500/30 text-purple-200 font-bold px-2.5 py-0.5 rounded-full border border-purple-400/40 flex items-center gap-1">
+                <Award size={12} className="text-purple-300" /> 👑 Rescue Team Head / Commander
+              </span>
+            ) : (
+              <span className="text-xs bg-blue-500/20 text-blue-300 font-bold px-2.5 py-0.5 rounded-full border border-blue-400/30 flex items-center gap-1">
+                <ShieldCheck size={12} className="text-blue-400" /> 🛡️ Field Rescuer
+              </span>
+            )}
+
+            {session && (
+              <span className="text-xs bg-emerald-500/20 text-emerald-300 font-bold px-2.5 py-0.5 rounded-full border border-emerald-400/30 flex items-center gap-1">
+                <Globe size={12} /> Office Region: {session.officeName} ({session.regionRadiusKm} km Radius)
+              </span>
+            )}
           </div>
-          <h1 className="text-xl font-extrabold text-white">{profile.name}</h1>
-          <p className="text-xs text-stone-400 flex items-center gap-2 flex-wrap">
-            <span>Commander: <b>{profile.leaderName}</b></span>
+
+          <h1 className="text-xl font-extrabold text-white flex items-center gap-2">
+            {profile.name}
+            {session && <span className="text-xs font-normal text-stone-300">({session.email})</span>}
+          </h1>
+
+          <p className="text-xs text-stone-300 flex items-center gap-2 flex-wrap">
+            <span>Commander: <b>{session?.name || profile.leaderName}</b></span>
             <span>•</span>
-            <span>Phone: <b className="font-mono text-stone-300">{profile.phone}</b></span>
+            <span>Office Base: <b>{session?.officeName || "Regional Base Command"}</b></span>
             <span>•</span>
-            <span className="flex items-center gap-1">
-              <MapPin size={12} className="text-emerald-400" /> GPS Base: ({profile.lat.toFixed(4)}, {profile.lng.toFixed(4)})
+            <span className="flex items-center gap-1 text-emerald-400">
+              <MapPin size={12} /> ({session?.officeLat.toFixed(4) || profile.lat.toFixed(4)}, {session?.officeLng.toFixed(4) || profile.lng.toFixed(4)})
             </span>
           </p>
         </div>
 
-        <button
-          onClick={loadData}
-          className="text-xs bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 px-3.5 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition-all shadow-sm"
-        >
-          <RotateCw size={14} /> Refresh Field Stream
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/rescuer/login"
+            className="text-xs bg-purple-600 hover:bg-purple-500 text-white font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-2xs transition-all"
+          >
+            <LogIn size={14} /> Google Auth & Office Login
+          </Link>
+
+          <button
+            onClick={loadData}
+            className="text-xs bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 px-3.5 py-2 rounded-xl font-semibold flex items-center gap-1.5 transition-all shadow-2xs"
+          >
+            <RotateCw size={14} /> Refresh Stream
+          </button>
+        </div>
       </div>
 
       {/* Disaster Assignment & Fail-Safe Control */}
@@ -218,6 +265,13 @@ export default function RescuerDetailPage({
         allIncidents={incidents}
         onAssignmentChange={handleAssignmentChange}
         onStatusChange={handleStatusChange}
+      />
+
+      {/* Rescue Team Head Resource Estimator & Directive Broadcast */}
+      <RescueHeadResourceEstimator
+        assignedIncident={assignedIncident}
+        rescuerId={rescuerId}
+        leaderName={profile.leaderName}
       />
 
       {/* Map View of Assigned / Nearest Disaster */}
