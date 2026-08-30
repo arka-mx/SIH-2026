@@ -1,15 +1,162 @@
 "use client";
 
-import { FormEvent } from "react";
+import { FormEvent, useState, useEffect } from "react";
 import { ArrowRight, UsersRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PublicHeader } from "@/components/public/PublicHeader";
 
+const TRANSLATIONS = {
+  English: {
+    kicker: "Community response access",
+    heading: "Help your community move faster.",
+    subheading: "Share what is happening or offer your skills to people who need support.",
+    title: "Citizen access",
+    name: "Name",
+    location: "Location",
+    language: "Language",
+    submit: "Enter citizen panel"
+  },
+  Hindi: {
+    kicker: "सामुदायिक प्रतिक्रिया पहुंच",
+    heading: "अपने समुदाय की तेजी से मदद करें।",
+    subheading: "समर्थन की आवश्यकता वाले लोगों को बताएं कि क्या हो रहा है या अपने कौशल की पेशकश करें।",
+    title: "नागरिक पहुंच",
+    name: "नाम",
+    location: "स्थान",
+    language: "भाषा",
+    submit: "नागरिक पैनल में प्रवेश करें"
+  },
+  Bengali: {
+    kicker: "কমিউনিটি রেসপন্স অ্যাক্সেস",
+    heading: "আপনার সম্প্রদায়কে দ্রুত সাহায্য করুন।",
+    subheading: "কী ঘটছে তা শেয়ার করুন বা যাদের সমর্থন প্রয়োজন তাদের কাছে আপনার দক্ষতাগুলি অফার করুন।",
+    title: "নাগরিক অ্যাক্সেস",
+    name: "নাম",
+    location: "স্থান",
+    language: "ভাষা",
+    submit: "নাগরিক প্যানেলে প্রবেশ করুন"
+  },
+  Odia: {
+    kicker: "ସାମୁଦାୟିକ ପ୍ରତିକ୍ରିୟା ପ୍ରବେଶ",
+    heading: "ଆପଣଙ୍କର ସମ୍ପ୍ରଦାୟକୁ ଶୀଘ୍ର ସାହାଯ୍ୟ କରନ୍ତୁ।",
+    subheading: "କଣ ଘଟୁଛି ସେୟାର କରନ୍ତୁ କିମ୍ବା ସାହାଯ୍ୟ ଆବଶ୍ୟକ କରୁଥିବା ଲୋକଙ୍କୁ ଆପଣଙ୍କର ଦକ୍ଷତା ପ୍ରଦାନ କରନ୍ତୁ।",
+    title: "ନାଗରିକ ପ୍ରବେଶ",
+    name: "ନାମ",
+    location: "ସ୍ଥାନ",
+    language: "ଭାଷା",
+    submit: "ନାଗରିକ ପ୍ୟାନେଲରେ ପ୍ରବେଶ କରନ୍ତୁ"
+  },
+  Telugu: {
+    kicker: "కమ్యూనిటీ రెస్పాన్స్ యాక్సెస్",
+    heading: "మీ కమ్యూనిటీ వేగంగా స్పందించేలా సహాయం చేయండి.",
+    subheading: "ఏమి జరుగుతుందో షేర్ చేయండి లేదా మద్దతు అవసరమైన వ్యక్తులకు మీ నైపుణ్యాలను అందించండి.",
+    title: "సిటిజన్ యాక్సెస్",
+    name: "పేరు",
+    location: "ప్రాంతం",
+    language: "భాష",
+    submit: "సిటిజన్ ప్యానెల్‌లోకి ప్రవేశించండి"
+  }
+};
+
+type SupportedLang = "English" | "Hindi" | "Bengali" | "Odia" | "Telugu";
+
 export default function CitizenLoginPage() {
   const router = useRouter();
+  const [lang, setLang] = useState<SupportedLang>("English");
+  const [name, setName] = useState(process.env.NEXT_PUBLIC_DEFAULT_CITIZEN_NAME || "Rajesh Kumar");
+  const [location, setLocation] = useState(process.env.NEXT_PUBLIC_DEFAULT_CITIZEN_LOCATION || "Mumbai Coastal District");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("momentum_language");
+    if (stored === "Hindi" || stored === "hi") {
+      setLang("Hindi");
+    } else if (stored === "Bengali" || stored === "bn") {
+      setLang("Bengali");
+    } else if (stored === "Odia" || stored === "or") {
+      setLang("Odia");
+    } else if (stored === "Telugu" || stored === "te") {
+      setLang("Telugu");
+    } else {
+      setLang("English");
+    }
+  }, []);
+
+  const t = TRANSLATIONS[lang] || TRANSLATIONS.English;
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     router.push("/citizen");
   }
-  return <main className="public-home"><PublicHeader /><section className="access-form-layout"><div><p className="hero-kicker">Community response access</p><h1>Help your community move faster.</h1><p>Share what is happening or offer your skills to people who need support.</p></div><form className="access-form" onSubmit={handleSubmit}><div className="form-icon citizen-icon"><UsersRound size={24} /></div><h2>Citizen access</h2><label htmlFor="citizen-name">Name<input id="citizen-name" name="name" required placeholder="Your full name" /></label><label htmlFor="citizen-location">Location<input id="citizen-location" name="location" required placeholder="City, district or village" /></label><label htmlFor="citizen-language">Language<select id="citizen-language" name="language" defaultValue="English"><option>English</option><option>Hindi</option><option>Odia</option><option>Bengali</option><option>Telugu</option></select></label><button className="form-submit citizen-submit" type="submit">Enter citizen panel <ArrowRight size={17} /></button></form></section></main>;
+
+  function handleLanguageChange(selected: string) {
+    const value = selected as SupportedLang;
+    setLang(value);
+    localStorage.setItem("sih_language", value);
+  }
+
+  return (
+    <main className="public-home">
+      <PublicHeader />
+      <section className="access-form-layout">
+        <div>
+          <p className="hero-kicker">{t.kicker}</p>
+          <h1>{t.heading}</h1>
+          <p>{t.subheading}</p>
+        </div>
+        <form className="access-form" onSubmit={handleSubmit}>
+          <div className="form-icon citizen-icon">
+            <UsersRound size={24} />
+          </div>
+          <h2>{t.title}</h2>
+
+          <label htmlFor="citizen-name">
+            {t.name}
+            <input
+              id="citizen-name"
+              name="name"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your full name"
+              className="mt-1"
+            />
+          </label>
+
+          <label htmlFor="citizen-location">
+            {t.location}
+            <input
+              id="citizen-location"
+              name="location"
+              required
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="City, district or village"
+              className="mt-1"
+            />
+          </label>
+
+          <label htmlFor="citizen-language">
+            {t.language}
+            <select 
+              id="citizen-language" 
+              name="language" 
+              value={lang} 
+              onChange={(e) => handleLanguageChange(e.target.value)}
+              className="mt-1"
+            >
+              <option value="English">English</option>
+              <option value="Hindi">हिन्दी</option>
+              <option value="Bengali">বাংলা</option>
+              <option value="Odia">ଓଡ଼ିଆ</option>
+              <option value="Telugu">తెలుగు</option>
+            </select>
+          </label>
+
+          <button className="form-submit citizen-submit" type="submit">
+            {t.submit} <ArrowRight size={17} />
+          </button>
+        </form>
+      </section>
+    </main>
+  );
 }

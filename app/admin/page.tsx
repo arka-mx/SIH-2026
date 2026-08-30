@@ -104,6 +104,50 @@ export default function AdminPage() {
         <EmergencyStats incidents={incidents} />
       </div>
 
+      {/* Automated Operations Brief Section */}
+      <div className="bg-[#fffcf5] border border-[#e8dcc4] p-5 rounded-2xl mb-5 shadow-2xs">
+        <h3 className="text-xs font-black uppercase tracking-wider text-[#9c592e] flex items-center gap-1.5 mb-2.5">
+          <Sparkles size={15} className="text-[#d77e37] animate-pulse" /> AUTOMATED MOMENTUM OPS BRIEF
+        </h3>
+        <div className="text-xs text-stone-700">
+          {(() => {
+            const active = incidents.filter((i) => i.status !== "resolved");
+            const critical = active.filter((i) => 
+              i.type === "fire" || 
+              i.type === "medical" || 
+              (i.description && i.description.includes("Injured:") && !i.description.includes("Injured: 0"))
+            ).length;
+            const pending = active.filter((i) => i.status === "unverified" || i.status === "verified").length;
+            const fullShelters = resources.filter((r) => r.type === "shelter" && (r.capacity_used / r.capacity_total) >= 0.7).length;
+
+            const briefs = [];
+            if (critical > 0) {
+              briefs.push(`⚠️ ${critical} critical incident${critical > 1 ? "s" : ""} require${critical === 1 ? "s" : ""} active resource coordination.`);
+            } else {
+              briefs.push(`✓ No active life-safety or fire hazards reported in the current window.`);
+            }
+            if (pending > 0) {
+              briefs.push(`⏳ ${pending} incident report${pending > 1 ? "s are" : " is"} pending dispatch validation.`);
+            }
+            if (fullShelters > 0) {
+              briefs.push(`🚨 ${fullShelters} emergency shelter${fullShelters > 1 ? "s are" : " is"} near capacity (>70%).`);
+            } else {
+              briefs.push(`✓ All district emergency camps are operating within normal occupancy limits.`);
+            }
+
+            return (
+              <ul className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {briefs.map((b, idx) => (
+                  <li key={idx} className="bg-white/80 p-3 rounded-xl border border-stone-200/60 font-semibold text-stone-800 flex items-start gap-2 shadow-3xs">
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
+        </div>
+      </div>
+
       <div className="dashboard-grid">
         <div className="space-y-4">
           <IncidentMap
