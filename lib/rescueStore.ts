@@ -1,4 +1,26 @@
 import { calcDistanceKm } from "@/lib/api";
+import {
+  verifyReport,
+  VerificationResult,
+  VerifiableIncident,
+} from "@/lib/reportVerification";
+import { dispatchEmergencyAlert } from "@/lib/emergencyAlertStore";
+import { estimateDemand, rankResources } from "@/lib/allocationEngine";
+import { releaseCapacity, snapshotResources } from "@/lib/resourceStore";
+import { resolveAllocationForReport, upsertRecommendation } from "@/lib/allocationStore";
+
+export interface RecommendedAllocationSummary {
+  resource_id: string;
+  resource_name: string;
+  resource_type: string;
+  distance_km: number;
+  eta_min: number;
+  demand: number;
+  allocated: number;
+  fully_covered: boolean;
+  reason: string;
+  score: number;
+}
 
 export interface RescueReportEvent {
   id: string;
@@ -12,6 +34,19 @@ export interface RescueReportEvent {
   ip_address: string;
   user_agent?: string;
   idempotency_key?: string;
+  reporter_kind?: "citizen" | "responder" | "authority";
+  created_at: string;
+}
+
+export interface ReportConfirmation {
+  id: string;
+  /** Who vouched for the report. */
+  by: "citizen" | "responder" | "authority" | "admin";
+  actor_id?: string;
+  actor_name?: string;
+  note?: string;
+  latitude?: number;
+  longitude?: number;
   created_at: string;
 }
 
@@ -27,13 +62,32 @@ export interface ActiveRescueIncident {
   address?: string;
   description: string;
   type: string;
+  reporter_name?: string;
   report_count: number;
   reports: RescueReportEvent[];
+  /** Explicit corroborations from citizens / responders / authorities. */
+  confirmations: ReportConfirmation[];
+  /** Attached media strengthens the report. */
+  has_photo?: boolean;
+  has_video?: boolean;
+  /** An admin manually vouched for this report. */
+  manually_verified?: boolean;
+  /** Latest output of the Report Verification System. */
+  verification?: VerificationResult;
+  /**
+   * Auto-computed best resource match, refreshed while the incident is verified
+   * and not yet dispatched. Non-binding — an operator confirms it to allocate.
+   */
+  recommended_allocation?: RecommendedAllocationSummary | null;
   assigned_rescuer_id?: string;
   assigned_rescuer?: any;
   rescuer_status?: "pending_admin" | "assigned" | "admin_denied_auto_routed" | "arrived";
   denied_by_admin?: boolean;
   assignment_source?: "admin_dispatch" | "nearest_fallback_admin_denied";
+  cancel_reason?: string;
+  cancelled_by?: "citizen_cancel" | "citizen_safe";
+  /** Set once the Emergency Alert System has broadcast this verified disaster. */
+  alert_dispatched?: boolean;
   created_at: string;
   updated_at: string;
   resolved_at?: string;
@@ -50,6 +104,10 @@ export interface SubmitRescuePayload {
   user_agent?: string;
   idempotency_key?: string;
   address?: string;
+  reporter_name?: string;
+  reporter_kind?: "citizen" | "responder" | "authority";
+  has_photo?: boolean;
+  has_video?: boolean;
 }
 
 export interface RescueSubmissionResult {
@@ -126,14 +184,16 @@ export async function processRescueSubmission(payload: SubmitRescuePayload): Pro
         ip_address: ip,
         user_agent: payload.user_agent,
         idempotency_key: payload.idempotency_key,
+        reporter_kind: payload.reporter_kind || "citizen",
         created_at: nowIso,
       };
 
       inMemoryEvents.push(reportEvent);
 
       const updatedReports = [...existingInc.reports, reportEvent];
-      const updatedInc: ActiveRescueIncident = {
+      let updatedInc: ActiveRescueIncident = {
         ...existingInc,
+        reporter_name: existingInc.reporter_name || payload.reporter_name,
         type: payload.type || existingInc.type,
         description: payload.message ? `${existingInc.description} | ${payload.message}` : existingInc.description,
         latitude: payload.latitude,
@@ -141,9 +201,13 @@ export async function processRescueSubmission(payload: SubmitRescuePayload): Pro
         address: payload.address || existingInc.address,
         report_count: updatedReports.length,
         reports: updatedReports,
+        confirmations: existingInc.confirmations || [],
+        has_photo: existingInc.has_photo || payload.has_photo,
+        has_video: existingInc.has_video || payload.has_video,
         updated_at: nowIso,
       };
 
+      updatedInc = applyVerification(updatedInc);
       inMemoryIncidents[activeIncIndex] = updatedInc;
 
       result = {
@@ -169,12 +233,13 @@ export async function processRescueSubmission(payload: SubmitRescuePayload): Pro
         ip_address: ip,
         user_agent: payload.user_agent,
         idempotency_key: payload.idempotency_key,
+        reporter_kind: payload.reporter_kind || "citizen",
         created_at: nowIso,
       };
 
       inMemoryEvents.push(reportEvent);
 
-      const newInc: ActiveRescueIncident = {
+      let newInc: ActiveRescueIncident = {
         id: newIncId,
         incident_id: newIncId,
         device_id: deviceId,
@@ -186,12 +251,17 @@ export async function processRescueSubmission(payload: SubmitRescuePayload): Pro
         address: payload.address || "Target Sector Location",
         description: payload.message || `Emergency Request (${payload.type.toUpperCase()})`,
         type: payload.type || "flood",
+        reporter_name: payload.reporter_name,
         report_count: 1,
         reports: [reportEvent],
+        confirmations: [],
+        has_photo: payload.has_photo,
+        has_video: payload.has_video,
         created_at: nowIso,
         updated_at: nowIso,
       };
 
+      newInc = applyVerification(newInc);
       inMemoryIncidents.unshift(newInc);
 
       result = {
@@ -203,6 +273,11 @@ export async function processRescueSubmission(payload: SubmitRescuePayload): Pro
       };
     }
 
+    // A fresh report can also strengthen a neighbouring incident's cluster.
+    recomputeAllVerification();
+    const rescored = inMemoryIncidents.find((i) => i.id === result.incident.id);
+    if (rescored) result.incident = rescored;
+
     if (payload.idempotency_key) {
       idempotencyMap.set(payload.idempotency_key, result);
     }
@@ -211,6 +286,213 @@ export async function processRescueSubmission(payload: SubmitRescuePayload): Pro
   } finally {
     releaseLock();
   }
+}
+
+/* ─────────────────────────── Report Verification ─────────────────────────── */
+
+function toVerifiable(inc: ActiveRescueIncident): VerifiableIncident {
+  return {
+    id: inc.id,
+    deviceId: inc.device_id,
+    type: inc.type,
+    latitude: inc.latitude,
+    longitude: inc.longitude,
+    status: inc.status,
+    createdAt: inc.created_at,
+    updatedAt: inc.updated_at,
+    reporterName: inc.reporter_name,
+    reports: (inc.reports || []).map((r) => ({
+      deviceId: r.device_id,
+      ipAddress: r.ip_address,
+      latitude: r.latitude,
+      longitude: r.longitude,
+      createdAt: r.created_at,
+      reporterKind: r.reporter_kind,
+    })),
+    confirmations: (inc.confirmations || []).map((c) => ({
+      by: c.by,
+      actorId: c.actor_id,
+      createdAt: c.created_at,
+    })),
+    hasPhoto: inc.has_photo,
+    hasVideo: inc.has_video,
+    manuallyVerified: inc.manually_verified,
+  };
+}
+
+/**
+ * Recompute the confidence score for a single incident and progressively
+ * promote its workflow `status` as confidence crosses thresholds. Never
+ * downgrades a status an admin/rescuer already advanced.
+ */
+function applyVerification(inc: ActiveRescueIncident): ActiveRescueIncident {
+  const population = inMemoryIncidents
+    .filter((i) => i.id !== inc.id && i.status !== "cancelled")
+    .map(toVerifiable);
+
+  const verification = verifyReport(toVerifiable(inc), population);
+
+  let status = inc.status;
+  if (status === "unverified") {
+    if (verification.tier === "verified") status = "verified";
+  }
+
+  const recommended_allocation = computeRecommendation(inc, status);
+
+  // ── Emergency Alert System trigger ──
+  // A citizen SOS that has just crossed into VERIFIED and is critical/high is an
+  // actionable disaster: notify responders + authorities (and nearby citizens)
+  // by SMS and in-app. Fire-and-forget; the alert store de-dupes repeats.
+  if (inc.status === "unverified" && status === "verified" && !inc.alert_dispatched) {
+    if (inc.severity === "critical" || inc.severity === "high") {
+      void dispatchEmergencyAlert({
+        category: "disaster_verified",
+        alertType: `${(inc.type || "disaster").replace(/_/g, " ")} (verified)`,
+        severity: inc.severity,
+        audiences: ["responders", "authorities", "citizens"],
+        locationName: inc.address,
+        latitude: inc.latitude,
+        longitude: inc.longitude,
+        instructions: "Move to higher/safer ground and await responders. Call 112 if in immediate danger.",
+        incidentId: inc.incident_id || inc.id,
+        dedupeKey: `disaster_verified:${inc.incident_id || inc.id}`,
+      }).catch((err) => console.error("Emergency alert dispatch failed:", err));
+    }
+    return { ...inc, verification, status, alert_dispatched: true, recommended_allocation };
+  }
+
+  return { ...inc, verification, status, recommended_allocation };
+}
+
+/**
+ * Auto-allocation match. While an incident is verified but not yet dispatched,
+ * pick the best available resource (distance + type + availability + capacity +
+ * severity) and mirror it into the allocation ledger as a non-binding
+ * `recommended` line. Cleared once a resource is assigned.
+ */
+function computeRecommendation(
+  inc: ActiveRescueIncident,
+  status: ActiveRescueIncident["status"]
+): RecommendedAllocationSummary | null {
+  if (status !== "verified" || inc.assigned_rescuer_id) return null;
+  if (!Number.isFinite(inc.latitude) || !Number.isFinite(inc.longitude)) return null;
+
+  try {
+    const engineIncident = {
+      id: inc.id,
+      type: inc.type,
+      lat: inc.latitude,
+      lng: inc.longitude,
+      severity: inc.severity,
+      description: inc.description,
+      status,
+    };
+    const ranked = rankResources(engineIncident, snapshotResources());
+    const pick = ranked.find((c) => c.available && c.reachable && c.headroom > 0);
+    if (!pick) return null;
+
+    const demand = estimateDemand(engineIncident);
+    const allocated = Math.min(demand, pick.headroom);
+    const reason = pick.reasons.join(" · ");
+
+    upsertRecommendation({
+      report_id: inc.id,
+      resource_id: pick.resource.id,
+      resource_name: pick.resource.name,
+      resource_type: pick.resource.type,
+      demand,
+      allocated,
+      fully_covered: allocated >= demand,
+      distance_km: pick.distanceKm,
+      eta_min: pick.etaMin,
+      reason,
+      incident_type: inc.type,
+      incident_lat: inc.latitude,
+      incident_lng: inc.longitude,
+      resource_lat: pick.resource.lat,
+      resource_lng: pick.resource.lng,
+    });
+
+    return {
+      resource_id: pick.resource.id,
+      resource_name: pick.resource.name,
+      resource_type: pick.resource.type,
+      distance_km: pick.distanceKm,
+      eta_min: pick.etaMin,
+      demand,
+      allocated,
+      fully_covered: allocated >= demand,
+      reason,
+      score: pick.score,
+    };
+  } catch (err) {
+    console.warn("[rescueStore] recommendation failed:", (err as Error).message);
+    return null;
+  }
+}
+
+/**
+ * Re-score every active incident. A new report anywhere can strengthen a
+ * neighbouring incident's cluster, so this runs after each submission.
+ */
+export function recomputeAllVerification(): void {
+  inMemoryIncidents = inMemoryIncidents.map((inc) =>
+    inc.status === "cancelled" || inc.status === "resolved"
+      ? inc
+      : applyVerification(inc)
+  );
+}
+
+/**
+ * Record an explicit cross-verification of a report by a nearby citizen,
+ * a responder on scene, or an authority. Recomputes confidence immediately.
+ */
+export function addIncidentConfirmation(
+  incidentId: string,
+  input: Omit<ReportConfirmation, "id" | "created_at"> & { created_at?: string }
+): ActiveRescueIncident | null {
+  const index = inMemoryIncidents.findIndex(
+    (i) => i.incident_id === incidentId || i.id === incidentId
+  );
+  if (index === -1) return null;
+
+  const confirmation: ReportConfirmation = {
+    id: "CFM-" + Math.floor(1000 + Math.random() * 9000) + "-" + Date.now().toString(36),
+    by: input.by,
+    actor_id: input.actor_id,
+    actor_name: input.actor_name,
+    note: input.note,
+    latitude: input.latitude,
+    longitude: input.longitude,
+    created_at: input.created_at || new Date().toISOString(),
+  };
+
+  const inc = inMemoryIncidents[index];
+  inMemoryIncidents[index] = applyVerification({
+    ...inc,
+    confirmations: [...(inc.confirmations || []), confirmation],
+    updated_at: confirmation.created_at,
+  });
+
+  recomputeAllVerification();
+  return inMemoryIncidents.find((i) => i.id === inc.id) || null;
+}
+
+/** Admin manually vouches for (or retracts a vouch on) a report. */
+export function setIncidentManualVerification(
+  incidentId: string,
+  verified: boolean
+): ActiveRescueIncident | null {
+  const index = inMemoryIncidents.findIndex(
+    (i) => i.incident_id === incidentId || i.id === incidentId
+  );
+  if (index === -1) return null;
+  inMemoryIncidents[index] = applyVerification({
+    ...inMemoryIncidents[index],
+    manually_verified: verified,
+    updated_at: new Date().toISOString(),
+  });
+  return inMemoryIncidents[index];
 }
 
 /**
@@ -258,6 +540,49 @@ export function updateRescueIncidentStatus(
 
   inMemoryIncidents[index] = updated;
   return updated;
+}
+
+/**
+ * Cancels every active (not resolved / not already cancelled) incident belonging
+ * to a device. Used when the citizen taps "Cancel SOS" or shares an "I'm safe"
+ * check-in — the situation is over and any dispatch to admin / rescue team head
+ * should be aborted. Returns the incidents that were cancelled.
+ */
+export function cancelActiveIncidentsForDevice(
+  deviceId: string,
+  reason: string = "Citizen cancelled the SOS",
+  source: "citizen_cancel" | "citizen_safe" = "citizen_cancel"
+): ActiveRescueIncident[] {
+  const nowIso = new Date().toISOString();
+  const cancelled: ActiveRescueIncident[] = [];
+
+  inMemoryIncidents = inMemoryIncidents.map((inc) => {
+    if (inc.device_id !== deviceId) return inc;
+    if (inc.status === "resolved" || inc.status === "cancelled") return inc;
+
+    const updated: ActiveRescueIncident = {
+      ...inc,
+      status: "cancelled",
+      rescuer_status: undefined,
+      assigned_rescuer: undefined,
+      assigned_rescuer_id: undefined,
+      description: `${inc.description} | ${reason}`,
+      cancel_reason: reason,
+      cancelled_by: source,
+      updated_at: nowIso,
+      resolved_at: nowIso,
+    };
+    cancelled.push(updated);
+    return updated;
+  });
+
+  // Hand any held resource capacity back to the pool.
+  for (const inc of cancelled) {
+    const closed = resolveAllocationForReport(inc.id);
+    if (closed) releaseCapacity(closed.resource_id, closed.allocated);
+  }
+
+  return cancelled;
 }
 
 /**

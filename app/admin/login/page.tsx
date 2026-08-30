@@ -42,7 +42,7 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <main className="public-home theme-light">
+    <main className="public-home theme-light" data-no-translate>
       <BackButton />
       <section className="access-form-layout">
         <form className="access-form" onSubmit={handleSubmit}>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { apiGetAllIncidents, ReportItem } from "@/lib/api";
-import { MapPin, Phone, RotateCw } from "lucide-react";
+import { MapPin, Phone, RotateCw, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 
 export default function VolunteersPage() {

@@ -14,19 +14,23 @@ import {
   Mountain,
   HeartPulse,
   Share2,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { CitizenShell } from "@/components/citizen/CitizenShell";
-import { 
-  apiGetCitizenReports, 
-  apiGetAllResources, 
+import {
+  apiGetCitizenReports,
+  apiGetAllResources,
   apiGetRescuerLocations,
   apiPublishSafeShare,
+  apiCancelSos,
   ReportItem,
   ResourceItem
 } from "@/lib/api";
+import { getOrCreateDeviceId } from "@/lib/device";
 import { RescuerUnitProfile } from "@/types/rescuer";
 import { getOrCreateSessionId } from "@/lib/session";
+import { shareOrCopyLink } from "@/lib/shareLink";
 import { getSocket } from "@/lib/socket";
 import dynamic from "next/dynamic";
 
@@ -57,6 +61,7 @@ export default function CitizenHistoryPage() {
   const [sessionId, setSessionId] = useState<string>("");
   const [liveEvent, setLiveEvent] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [shareUrlById, setShareUrlById] = useState<Record<string, string>>({});
 
   async function loadReports(id: string) {
     if (!id) return;
@@ -78,33 +83,61 @@ export default function CitizenHistoryPage() {
   }
 
   async function handleShare(report: ReportItem) {
-    // Publish a public snapshot first so the link resolves even if the backend is offline.
-    const snapshot = await apiPublishSafeShare(report);
-    const reportId = snapshot.id;
-    const shareUrl = `${window.location.origin}/safe/${reportId}`;
-    const shareData = {
-      title: "My safety status — Momentum",
+    // The snapshot id is the report id, so the URL is known before any network
+    // call. Publish in the background — awaiting it here would consume the click
+    // gesture that navigator.share / clipboard need.
+    const shareUrl = `${window.location.origin}/safe/${report.id}`;
+    setShareUrlById((prev) => ({ ...prev, [report.id]: shareUrl }));
+
+    // "I'm safe" means the emergency is over — abort any active SOS so it stops
+    // routing to the admin and the rescue team head.
+    const stillActive = report.status !== "resolved" && report.status !== "cancelled";
+    if (stillActive) {
+      apiCancelSos(getOrCreateDeviceId(), { source: "citizen_safe" })
+        .then(() => {
+          setReports((prev) =>
+            prev.map((r) =>
+              r.status !== "resolved" && r.status !== "cancelled"
+                ? { ...r, status: "cancelled" }
+                : r
+            )
+          );
+          setLiveEvent("You reported safe — SOS dispatch to the admin and rescue team was stopped.");
+        })
+        .catch(() => {});
+    }
+
+    const safeReport: ReportItem = stillActive
+      ? { ...report, status: "cancelled", description: `${report.description || ""} | Safe: Yes`.trim() }
+      : report;
+
+    const publishing = apiPublishSafeShare(safeReport).catch((err: unknown) => {
+      setLiveEvent(
+        err instanceof Error ? err.message : "The safe link may take a moment to open."
+      );
+    });
+
+    const outcome = await shareOrCopyLink({
+      title: "My safety status — Sanket",
       text: "I've shared my location and safety status. You can follow it live here:",
       url: shareUrl,
-    };
-
-    try {
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share(shareData);
-        return;
-      }
-    } catch (err) {
-      // user dismissed the share sheet — don't fall back to copying
-      if (err instanceof Error && err.name === "AbortError") return;
+    });
+    if (outcome === "copied") {
+      setCopiedId(report.id);
+      setTimeout(() => setCopiedId(null), 2500);
     }
 
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-    } catch {
-      // clipboard blocked — still surface feedback so the user can copy from the address bar
+    await publishing;
+  }
+
+  async function handleCancel(report: ReportItem) {
+    if (typeof window !== "undefined" &&
+        !window.confirm("Cancel this SOS? Rescue teams and the district admin will stop responding to it.")) {
+      return;
     }
-    setCopiedId(reportId);
-    setTimeout(() => setCopiedId(null), 2500);
+    await apiCancelSos(getOrCreateDeviceId(), { source: "citizen_cancel" });
+    setReports((prev) => prev.map((r) => (r.id === report.id ? { ...r, status: "cancelled" } : r)));
+    setLiveEvent(`SOS #${report.id.slice(0, 8)} cancelled — dispatch to the admin and rescue team stopped.`);
   }
 
   useEffect(() => {
@@ -192,6 +225,8 @@ export default function CitizenHistoryPage() {
             <CheckCircle size={11} /> Resolved
           </span>
         );
+      case "cancelled":
+        return <span className="adm-status adm-status--mute">Cancelled</span>;
       default:
         return <span className="adm-status adm-status--mute">{status}</span>;
     }
@@ -208,7 +243,6 @@ export default function CitizenHistoryPage() {
           <button onClick={() => loadReports(sessionId)} className="adm-btn">
             <RotateCw size={13} /> Refresh
           </button>
-          <span className="login-note">Session {sessionId.slice(0, 10)}…</span>
         </div>
       </div>
 
@@ -315,7 +349,12 @@ export default function CitizenHistoryPage() {
                         </span>
                       </h3>
                       <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                        <MapPin size={12} /> {report.location_wkt || "GPS location"} ·{" "}
+                        <MapPin size={12} />{" "}
+                        {report.address ||
+                          (repLat !== undefined && repLng !== undefined && !isNaN(repLat) && !isNaN(repLng)
+                            ? `${repLat.toFixed(4)}, ${repLng.toFixed(4)}`
+                            : "GPS location")}{" "}
+                        ·{" "}
                         {new Date(report.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
@@ -378,7 +417,43 @@ export default function CitizenHistoryPage() {
                   <Share2 size={12} />
                   {copiedId === report.id ? "Link copied" : "Share “I’m safe” link"}
                 </button>
+                {report.status !== "resolved" && report.status !== "cancelled" && (
+                  <button
+                    type="button"
+                    onClick={() => handleCancel(report)}
+                    className="adm-btn adm-btn--danger"
+                  >
+                    <X size={12} /> Cancel SOS
+                  </button>
+                )}
               </div>
+
+              {shareUrlById[report.id] && (
+                <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
+                  <input
+                    readOnly
+                    value={shareUrlById[report.id]}
+                    onFocus={(e) => e.currentTarget.select()}
+                    style={{
+                      flex: 1,
+                      minWidth: 200,
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: 11,
+                      padding: "7px 9px",
+                      border: "1px solid #d5dbe3",
+                      background: "#fff",
+                    }}
+                  />
+                  <a
+                    href={shareUrlById[report.id]}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="adm-btn"
+                  >
+                    Open ↗
+                  </a>
+                </div>
+              )}
 
               <div className="cz-steps">
                   <span className="done">Submitted</span>

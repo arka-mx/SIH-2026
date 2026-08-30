@@ -6,19 +6,23 @@ import { AdminShell } from "@/components/layout/AdminShell";
 import { EmergencyStats } from "@/components/admin/EmergencyStats";
 import { DashboardCard } from "@/components/admin/DashboardCard";
 import { IncidentMap } from "@/components/incidents/IncidentMap";
+import { DisasterHeatmap } from "@/components/admin/DisasterHeatmap";
+import { AllocationOptimizer } from "@/components/admin/AllocationOptimizer";
 import { IncidentCard } from "@/components/incidents/IncidentCard";
 import { ResponseTeamRequests } from "@/components/admin/ResponseTeamRequests";
 import { CitizenResponsesFeed } from "@/components/admin/CitizenResponsesFeed";
 import { Badge } from "@/components/ui/Badge";
-import { 
-  apiGetAllIncidents, 
-  apiGetAllResources, 
-  apiGetAutomatedPermissions, 
+import {
+  apiGetAllIncidents,
+  apiGetAllResources,
+  apiGetAutomatedPermissions,
   apiGetResponseTeamRequests,
   apiGetCitizenResponses,
   apiGetRescuerLocations,
+  apiGetActiveAllocations,
   ReportItem,
-  ResourceItem
+  ResourceItem,
+  AllocationLine
 } from "@/lib/api";
 import { PredeterminedPermissionSettings, ResponseTeamRequest, CitizenResponse, RescuerUnitProfile } from "@/types/rescuer";
 import { useRealtimeIncidents } from "@/lib/socket";
@@ -28,6 +32,7 @@ export default function AdminPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [selectedIncident, setSelectedIncident] = useState<ReportItem | null>(null);
   const [resources, setResources] = useState<ResourceItem[]>([]);
+  const [allocations, setAllocations] = useState<AllocationLine[]>([]);
   const [rescuers, setRescuers] = useState<RescuerUnitProfile[]>([]);
   const [permissions, setPermissions] = useState<PredeterminedPermissionSettings | null>(null);
   const [teamRequests, setTeamRequests] = useState<ResponseTeamRequest[]>([]);
@@ -36,16 +41,18 @@ export default function AdminPage() {
 
   async function fetchFreshData() {
     try {
-      const [incData, resData, permData, reqData, citData, rescData] = await Promise.all([
+      const [incData, resData, permData, reqData, citData, rescData, allocData] = await Promise.all([
         apiGetAllIncidents(),
         apiGetAllResources(),
         apiGetAutomatedPermissions(),
         apiGetResponseTeamRequests(),
         apiGetCitizenResponses(),
         apiGetRescuerLocations(),
+        apiGetActiveAllocations(),
       ]);
       setIncidents(incData);
       setResources(resData);
+      setAllocations(allocData);
       setRescuers(rescData);
       setPermissions(permData);
       setTeamRequests(reqData);
@@ -89,7 +96,7 @@ export default function AdminPage() {
         <h3 className="eyebrow mb-3">Status</h3>
         <div className="text-xs text-slate-700">
           {(() => {
-            const active = incidents.filter((i) => i.status !== "resolved");
+            const active = incidents.filter((i) => i.status !== "resolved" && i.status !== "cancelled");
             const critical = active.filter((i) =>
               i.type === "fire" ||
               i.type === "medical" ||
@@ -127,12 +134,22 @@ export default function AdminPage() {
         </div>
       </div>
 
+      <DisasterHeatmap incidents={incidents} />
+
+      <AllocationOptimizer
+        incidents={incidents}
+        resources={resources}
+        allocations={allocations}
+        onDispatched={fetchFreshData}
+      />
+
       <div className="dashboard-grid">
         <div className="space-y-4">
           <IncidentMap
             incidents={incidents}
             resources={resources}
             rescuers={rescuers}
+            allocations={allocations}
             radicalRegions={permissions?.regions || []}
             selectedIncidentId={selectedIncident?.id}
             onSelectIncident={handleSelectIncident}

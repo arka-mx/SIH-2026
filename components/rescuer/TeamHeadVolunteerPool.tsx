@@ -8,15 +8,18 @@ interface TeamHeadVolunteerPoolProps {
   officeLat?: number;
   officeLng?: number;
   officeName?: string;
+  regionRadiusKm?: number;
   isTeamHead?: boolean;
 }
 
 export function TeamHeadVolunteerPool({
   officeLat,
   officeLng,
-  officeName = "Regional Base Command",
+  officeName,
+  regionRadiusKm = 35,
   isTeamHead = true,
 }: TeamHeadVolunteerPoolProps) {
+  const regionLabel = officeName || "your office jurisdiction";
   const [pledges, setPledges] = useState<VolunteerPledge[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -24,7 +27,7 @@ export function TeamHeadVolunteerPool({
   async function loadPledges() {
     try {
       setLoading(true);
-      const data = await apiGetVolunteerPledgesForHead(officeLat, officeLng, 35);
+      const data = await apiGetVolunteerPledgesForHead(officeLat, officeLng, regionRadiusKm);
       setPledges(data);
     } catch (err) {
       console.warn("Could not load volunteer pledges for head:", err);
@@ -37,7 +40,7 @@ export function TeamHeadVolunteerPool({
     loadPledges();
     const interval = setInterval(loadPledges, 4000);
     return () => clearInterval(interval);
-  }, [officeLat, officeLng]);
+  }, [officeLat, officeLng, regionRadiusKm]);
 
   async function handleApprove(id: string) {
     setActionLoading(id);
@@ -74,7 +77,7 @@ export function TeamHeadVolunteerPool({
               <Award size={12} /> Rescue Team Head Direct Stream
             </span>
             <span className="text-xs font-bold text-stone-500">
-              Region: {officeName}
+              Region: {regionLabel}
             </span>
           </div>
           <h2 className="text-base font-extrabold text-stone-900 mt-1 flex items-center gap-2">
@@ -94,7 +97,7 @@ export function TeamHeadVolunteerPool({
         </div>
       ) : pledges.length === 0 ? (
         <div className="py-6 text-center text-xs text-stone-400 bg-stone-50 rounded-xl border border-dashed border-stone-200">
-          No new volunteer resource pledges submitted in your office jurisdiction ({officeName}).
+          No new volunteer resource pledges submitted in {regionLabel}.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

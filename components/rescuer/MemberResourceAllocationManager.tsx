@@ -28,13 +28,17 @@ import {
 
 interface MemberResourceAllocationManagerProps {
   teamId: string;
+  teamName?: string;
   headName: string;
+  headPhone?: string;
   headOffice: string;
 }
 
 export function MemberResourceAllocationManager({
   teamId,
+  teamName,
   headName,
+  headPhone,
   headOffice,
 }: MemberResourceAllocationManagerProps) {
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -142,9 +146,9 @@ export function MemberResourceAllocationManager({
 
       await apiCreateMemberAllocation({
         teamId,
-        teamName: "NDRF Team Alpha (Regional Unit)",
+        teamName: teamName || teamId,
         headName,
-        headPhone: "+91 98765 11001",
+        headPhone: headPhone || "",
         headOffice,
         memberId: targetMember.id,
         memberName: targetMember.name,
@@ -257,7 +261,9 @@ export function MemberResourceAllocationManager({
             <span className="adm-tile__num">{members.length}</span>
             <span className="text-xs text-slate-500 font-mono">officers</span>
           </div>
-          <span className="text-[10px] text-emerald-600 font-bold block pt-1">All Field Ready</span>
+          <span className="text-[10px] text-emerald-600 font-bold block pt-1">
+            {members.filter((m) => m.status === "active" || m.status === "field_dispatched").length} field ready
+          </span>
         </div>
 
         <div className="adm-tile space-y-1">

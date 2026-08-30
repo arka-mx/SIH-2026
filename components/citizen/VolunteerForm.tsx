@@ -174,8 +174,20 @@ export function VolunteerForm() {
           </label>
 
           <label className="adm-field cz-span">
-            <span>
-              <MapPin size={13} /> Base location
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <MapPin size={13} /> Base location
+              </span>
+              <button
+                type="button"
+                onClick={handleDetectGPS}
+                disabled={gpsLoading}
+                className="adm-btn"
+                style={{ marginLeft: "auto", textTransform: "none", flexShrink: 0 }}
+              >
+                <Navigation size={13} />
+                {gpsLoading ? "Detecting…" : "Use current location"}
+              </button>
             </span>
             <input
               name="location"
@@ -184,28 +196,20 @@ export function VolunteerForm() {
               value={location}
               onChange={(e) => setLocation(e.target.value)}
             />
-            <button
-              type="button"
-              onClick={handleDetectGPS}
-              disabled={gpsLoading}
-              className="adm-btn"
-              style={{ marginTop: 10, width: "100%", justifyContent: "center" }}
-            >
-              <Navigation size={13} />
-              {gpsLoading ? "Detecting…" : "Use current location"}
-            </button>
           </label>
         </div>
 
-        <div className="adm-kv">
-          <span>Region</span>
-          <strong>{regionName}</strong>
-        </div>
-        <div className="adm-kv">
-          <span>Coordinates</span>
-          <strong style={{ fontFamily: "ui-monospace, monospace" }}>
-            {lat}, {lng}
-          </strong>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div className="adm-kv">
+            <span>Region</span>
+            <strong>{regionName}</strong>
+          </div>
+          <div className="adm-kv">
+            <span>Coordinates</span>
+            <strong style={{ fontFamily: "ui-monospace, monospace" }}>
+              {lat}, {lng}
+            </strong>
+          </div>
         </div>
 
         <div className="adm-note">

@@ -8,7 +8,7 @@ export default function Home() {
   const { t } = useLanguage();
 
   return (
-    <main className="public-home theme-light">
+    <main className="public-home theme-light" data-no-translate>
       <section className="home-hero">
         <div className="home-copy">
           <p className="hero-kicker">{t("heroKicker", "Community Response Network")}</p>

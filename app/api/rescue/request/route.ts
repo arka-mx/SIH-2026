@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
     let longitude = 0;
     let location_accuracy = 10;
     let address = "";
+    let reporter_name = "";
 
     // Parse IP Address from headers
     const forwardedFor = req.headers.get("x-forwarded-for");
@@ -31,6 +32,7 @@ export async function POST(req: NextRequest) {
       latitude = parseFloat((formData.get("lat") as string) || (formData.get("latitude") as string) || "0");
       longitude = parseFloat((formData.get("lng") as string) || (formData.get("longitude") as string) || "0");
       address = (formData.get("address") as string) || "";
+      reporter_name = (formData.get("reporter_name") as string) || "";
     } else {
       const body = await req.json();
       if (!device_id) device_id = body.device_id || body.session_id || "";
@@ -41,6 +43,7 @@ export async function POST(req: NextRequest) {
       longitude = typeof body.longitude === "number" ? body.longitude : parseFloat(body.lng || "0");
       location_accuracy = body.location_accuracy || 10;
       address = body.address || "";
+      reporter_name = body.reporter_name || "";
     }
 
     if (!device_id || device_id.trim().length === 0) {
@@ -69,6 +72,11 @@ export async function POST(req: NextRequest) {
       user_agent,
       idempotency_key: idempotency_key.trim() || undefined,
       address,
+      reporter_name: reporter_name.trim() || undefined,
+      reporter_kind: ((): "citizen" | "responder" | "authority" => {
+        const k = (req.headers.get("x-reporter-kind") || "").toLowerCase();
+        return k === "responder" || k === "authority" ? k : "citizen";
+      })(),
     };
 
     const result = await processRescueSubmission(payload);

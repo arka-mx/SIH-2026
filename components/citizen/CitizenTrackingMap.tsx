@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Crosshair } from "lucide-react";
 
 interface CitizenTrackingMapProps {
   reportLat: number;
@@ -31,6 +32,14 @@ export function CitizenTrackingMap({
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+
+  // Recenter the view on the citizen's distress location (the coordinates from
+  // the SOS), undoing any pan/zoom drift from auto-fit or manual panning.
+  function resetView() {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    map.easeTo({ center: [reportLng, reportLat], zoom: 14, pitch: 0, bearing: 0, duration: 500 });
+  }
 
   // Load MapLibre script and styles from CDN
   useEffect(() => {
@@ -225,8 +234,8 @@ export function CitizenTrackingMap({
 
   return (
     <div
-      ref={mapContainerRef}
       style={{
+        position: "relative",
         width: "100%",
         height: "180px",
         borderRadius: "10px",
@@ -234,6 +243,32 @@ export function CitizenTrackingMap({
         overflow: "hidden",
         marginTop: "12px",
       }}
-    />
+    >
+      <div ref={mapContainerRef} style={{ width: "100%", height: "100%" }} />
+      <button
+        type="button"
+        onClick={resetView}
+        title="Recenter on your location"
+        style={{
+          position: "absolute",
+          top: 8,
+          right: 8,
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          padding: "5px 9px",
+          fontSize: 11,
+          fontWeight: 700,
+          color: "#0f172a",
+          background: "rgba(255,255,255,0.92)",
+          border: "1px solid #cbd5e1",
+          borderRadius: 6,
+          cursor: "pointer",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+        }}
+      >
+        <Crosshair size={12} /> Reset view
+      </button>
+    </div>
   );
 }

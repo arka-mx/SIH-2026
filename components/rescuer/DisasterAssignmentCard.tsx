@@ -44,6 +44,23 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
   return Math.round(R * c * 10) / 10;
 }
 
+// Resolve an incident's coordinates from explicit fields or a POINT() WKT string.
+function resolveIncidentCoords(inc: ReportItem): { lat: number; lng: number } | null {
+  if (typeof inc.lat === "number" && typeof inc.lng === "number") {
+    return { lat: inc.lat, lng: inc.lng };
+  }
+  if (inc.location_wkt) {
+    const match = inc.location_wkt.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
+    if (match) return { lat: parseFloat(match[2]), lng: parseFloat(match[1]) };
+  }
+  return null;
+}
+
+// Rough ground travel estimate assuming ~28 km/h average emergency-vehicle speed.
+function estimateTravelMinutes(distanceKm: number): number {
+  return Math.max(1, Math.round((distanceKm / 28) * 60));
+}
+
 export function DisasterAssignmentCard({
   rescuerId,
   rescuerType,
@@ -63,23 +80,24 @@ export function DisasterAssignmentCard({
     (i) => i.status === "verified" || i.status === "unverified"
   );
 
-  const incidentsWithDistance = activeVerifiedIncidents.map((inc) => {
-    let lat = inc.lat ?? 19.076;
-    let lng = inc.lng ?? 72.8777;
-    if ((inc.lat === undefined || inc.lng === undefined) && inc.location_wkt) {
-      const match = inc.location_wkt.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
-      if (match) {
-        lng = parseFloat(match[1]);
-        lat = parseFloat(match[2]);
-      }
-    }
-    const dist = calculateDistanceKm(rescuerLat, rescuerLng, lat, lng);
-    return { ...inc, calculatedDistKm: dist, lat, lng };
-  });
+  const incidentsWithDistance = activeVerifiedIncidents
+    .map((inc) => {
+      const coords = resolveIncidentCoords(inc);
+      if (!coords) return null;
+      const dist = calculateDistanceKm(rescuerLat, rescuerLng, coords.lat, coords.lng);
+      return { ...inc, calculatedDistKm: dist, lat: coords.lat, lng: coords.lng };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
 
   // Sort by nearest distance
   incidentsWithDistance.sort((a, b) => a.calculatedDistKm - b.calculatedDistKm);
   const nearestDisaster = incidentsWithDistance[0] || null;
+
+  const assignedCoords = assignedIncident ? resolveIncidentCoords(assignedIncident) : null;
+  const assignedDistanceKm =
+    assignedCoords && Number.isFinite(rescuerLat) && Number.isFinite(rescuerLng)
+      ? calculateDistanceKm(rescuerLat, rescuerLng, assignedCoords.lat, assignedCoords.lng)
+      : null;
 
   async function handleAcceptNearestFallback() {
     if (!nearestDisaster) return;
@@ -154,22 +172,30 @@ export function DisasterAssignmentCard({
 
             <div className="text-right">
               <span className="text-sm font-mono font-bold text-slate-900 block">
-                {calculateDistanceKm(rescuerLat, rescuerLng, assignedIncident.lat || 19.076, assignedIncident.lng || 72.8777)} km away
+                {assignedDistanceKm !== null ? `${assignedDistanceKm} km away` : "Distance unavailable"}
               </span>
-              <span className="text-[11px] text-slate-500 flex items-center justify-end gap-1">
-                <Clock size={11} /> Est. ~12 min travel
-              </span>
+              {assignedDistanceKm !== null && (
+                <span className="text-[11px] text-slate-500 flex items-center justify-end gap-1">
+                  <Clock size={11} /> Est. ~{estimateTravelMinutes(assignedDistanceKm)} min travel
+                </span>
+              )}
             </div>
           </div>
 
           <div className="text-xs text-slate-700 bg-slate-50 border border-slate-200 p-3">
             <strong>Incident details &amp; requirements:</strong>{" "}
-            {assignedIncident.description || "Evacuation and emergency medical deployment required."}
+            {assignedIncident.description || "No description was attached to this dispatch."}
           </div>
 
           <div className="flex items-center justify-between pt-3 border-t border-slate-200 flex-wrap gap-2">
             <span className="text-xs text-slate-600 flex items-center gap-1">
-              <MapPin size={13} /> Location: <b className="text-slate-900">{assignedIncident.location_wkt || "District target"}</b>
+              <MapPin size={13} /> Location:{" "}
+              <b className="text-slate-900">
+                {assignedIncident.address ||
+                  (assignedCoords
+                    ? `${assignedCoords.lat.toFixed(4)}, ${assignedCoords.lng.toFixed(4)}`
+                    : "Not specified")}
+              </b>
             </span>
 
             <div className="flex gap-2">
@@ -214,7 +240,7 @@ export function DisasterAssignmentCard({
                     {nearestDisaster.calculatedDistKm} km from unit
                   </span>
                   <span className="text-[10px] text-slate-500 block mt-1">
-                    Est. {Math.round(nearestDisaster.calculatedDistKm * 3)} min travel
+                    Est. {estimateTravelMinutes(nearestDisaster.calculatedDistKm)} min travel
                   </span>
                 </div>
               </div>
