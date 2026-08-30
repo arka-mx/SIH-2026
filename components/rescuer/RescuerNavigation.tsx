@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
   Radio,
@@ -10,10 +8,7 @@ import {
   PackagePlus,
   UsersRound,
   HardHat,
-  Crown,
   Package,
-  Shield,
-  Layers,
   X,
 } from "lucide-react";
 
@@ -27,8 +22,50 @@ interface RescuerNavigationProps {
   onCloseMobile?: () => void;
 }
 
+const HEAD_ITEMS = [
+  { id: "overview", label: "Dashboard", icon: LayoutDashboard },
+  { id: "disasters", label: "Radar", icon: Eye },
+  { id: "district-head", label: "District Head", icon: Radio },
+  { id: "allocate", label: "Allocate", icon: PackagePlus },
+  { id: "volunteers", label: "Volunteers", icon: UsersRound },
+  { id: "supplies", label: "Supplies", icon: Package },
+];
+
+const MEMBER_ITEMS = [
+  { id: "member-portal", label: "My Orders", icon: HardHat },
+  { id: "member-supplies", label: "Supplies", icon: Package },
+];
+
+function RoleSwitch({
+  isTeamHead,
+  onToggleRole,
+}: {
+  isTeamHead: boolean;
+  onToggleRole?: (head: boolean) => void;
+}) {
+  return (
+    <div className="adm-segment w-full">
+      <button
+        type="button"
+        data-active={isTeamHead}
+        onClick={() => onToggleRole?.(true)}
+        className="flex-1"
+      >
+        Head
+      </button>
+      <button
+        type="button"
+        data-active={!isTeamHead}
+        onClick={() => onToggleRole?.(false)}
+        className="flex-1"
+      >
+        Member
+      </button>
+    </div>
+  );
+}
+
 export function RescuerNavigation({
-  rescuerId,
   isTeamHead,
   activeTab,
   onTabChange,
@@ -36,102 +73,43 @@ export function RescuerNavigation({
   mobileOpen = false,
   onCloseMobile,
 }: RescuerNavigationProps) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  // Close mobile drawer on tab change
   useEffect(() => {
     onCloseMobile?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isTeamHead]);
 
-  // Head Navigation Items
-  const headItems = [
-    { id: "overview", label: "Dashboard & Dispatch", icon: LayoutDashboard },
-    { id: "disasters", label: "Disaster Radar (Read-Only)", icon: Eye },
-    { id: "district-head", label: "District Head Connection", icon: Radio, badge: "Exclusive" },
-    { id: "allocate", label: "Ration & Resource Allocation", icon: PackagePlus },
-    { id: "volunteers", label: "Volunteer Pool", icon: UsersRound },
-    { id: "supplies", label: "Supply Inventory", icon: Package },
-  ];
+  const items = isTeamHead ? HEAD_ITEMS : MEMBER_ITEMS;
 
-  // Member Navigation Items
-  const memberItems = [
-    { id: "member-portal", label: "My Orders & Requirements", icon: HardHat },
-    { id: "member-supplies", label: "Unit Supply Inventory", icon: Package },
-  ];
-
-  const currentItems = isTeamHead ? headItems : memberItems;
+  const links = (onSelect?: () => void) =>
+    items.map((item) => {
+      const Icon = item.icon;
+      return (
+        <button
+          key={item.id}
+          type="button"
+          onClick={() => {
+            onTabChange?.(item.id);
+            onSelect?.();
+          }}
+          className={`nav-link w-full text-left ${activeTab === item.id ? "active" : ""}`}
+        >
+          <Icon size={18} />
+          <span>{item.label}</span>
+        </button>
+      );
+    });
 
   return (
     <>
       <aside className="sidebar">
-        {/* Role Indicator & Mode Switcher */}
-        <div className="p-2.5 mb-2 bg-white border border-[#d2ae82] rounded-xl space-y-2">
-          <span className="text-[10px] uppercase font-extrabold text-slate-500 tracking-wider flex items-center gap-1">
-            {isTeamHead ? <Crown size={12} className="text-amber-600" /> : <HardHat size={12} className="text-[#115e59]" />}
-            Active Role
-          </span>
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-lg">
-            <button
-              type="button"
-              onClick={() => onToggleRole && onToggleRole(true)}
-              className={`flex-1 py-1.5 px-2 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
-                isTeamHead
-                  ? "bg-amber-600 text-white shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Team Head
-            </button>
-            <button
-              type="button"
-              onClick={() => onToggleRole && onToggleRole(false)}
-              className={`flex-1 py-1.5 px-2 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
-                !isTeamHead
-                  ? "bg-[#115e59] text-white shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              Field Member
-            </button>
-          </div>
+        <div className="mb-3">
+          <span className="eyebrow block mb-2">Role</span>
+          <RoleSwitch isTeamHead={isTeamHead} onToggleRole={onToggleRole} />
         </div>
-
-        {/* Navigation Tab Links */}
-        <div className="space-y-1">
-          {currentItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onTabChange && onTabChange(item.id)}
-                className={`w-full text-left nav-link cursor-pointer flex items-center justify-between ${
-                  isActive ? "active font-bold" : ""
-                }`}
-              >
-                <span className="flex items-center gap-2.5">
-                  <Icon size={16} />
-                  <span>{item.label}</span>
-                </span>
-                {item.badge && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-500 text-white rounded-sm">
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        {links()}
       </aside>
 
-      {/* Mobile Drawer */}
-      <div
-        className={`admin-drawer ${mobileOpen ? "is-open" : ""}`}
-        aria-hidden={!mobileOpen}
-      >
+      <div className={`admin-drawer ${mobileOpen ? "is-open" : ""}`} aria-hidden={!mobileOpen}>
         <button
           type="button"
           className="admin-drawer__backdrop"
@@ -141,7 +119,7 @@ export function RescuerNavigation({
         />
         <nav className="admin-drawer__panel" aria-label="Rescuer navigation">
           <div className="admin-drawer__head">
-            <span className="admin-drawer__title">Rescue Unit Menu</span>
+            <span className="admin-drawer__title">Menu</span>
             <button
               type="button"
               className="admin-drawer__close"
@@ -152,56 +130,17 @@ export function RescuerNavigation({
               <X size={18} />
             </button>
           </div>
-
-          <div className="p-3 mb-2 bg-slate-50 border border-slate-200 rounded-none space-y-2">
-            <span className="text-[10px] uppercase font-bold text-slate-500">Role Designation</span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  onToggleRole && onToggleRole(true);
-                  onCloseMobile?.();
-                }}
-                className={`flex-1 py-1.5 text-xs font-bold ${
-                  isTeamHead ? "bg-amber-600 text-white" : "bg-white border text-slate-700"
-                }`}
-              >
-                Team Head
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onToggleRole && onToggleRole(false);
-                  onCloseMobile?.();
-                }}
-                className={`flex-1 py-1.5 text-xs font-bold ${
-                  !isTeamHead ? "bg-[#115e59] text-white" : "bg-white border text-slate-700"
-                }`}
-              >
-                Field Member
-              </button>
-            </div>
+          <div className="p-3 mb-1">
+            <span className="eyebrow block mb-2">Role</span>
+            <RoleSwitch
+              isTeamHead={isTeamHead}
+              onToggleRole={(head) => {
+                onToggleRole?.(head);
+                onCloseMobile?.();
+              }}
+            />
           </div>
-
-          {currentItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  onTabChange && onTabChange(item.id);
-                  onCloseMobile?.();
-                }}
-                className={`w-full text-left nav-link cursor-pointer ${isActive ? "active" : ""}`}
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
+          {links(onCloseMobile)}
         </nav>
       </div>
     </>
