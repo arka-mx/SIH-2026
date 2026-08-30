@@ -86,7 +86,7 @@ export function SupplyTracker({ initialSupplies, onUpdateSupplies }: SupplyTrack
     { icon: Fuel, label: "Vehicle fuel", value: `${supplies.fuelLiters} L` },
     { icon: BatteryCharging, label: "Sat-phone", value: `${supplies.satPhoneBatteryPct}%` },
     { icon: Package, label: "Life vests", value: `${supplies.lifeJackets} units` },
-    { icon: Package, label: "Night searchlights", value: "Ready (4/4)" },
+    { icon: HeartPulse, label: "IV fluids", value: `${supplies.ivFluidsCount} units` },
   ];
 
   return (

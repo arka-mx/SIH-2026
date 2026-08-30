@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, Send, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
-import { ReportItem, ResourceItem, apiGetShortlist, apiConfirmAllocation, apiResolveIncident, apiUpdateResourceStatus, apiDenyIncidentAndAutoRoute } from "@/lib/api";
+import { MapPin, Send, CheckCircle2, AlertCircle, XCircle, Sparkles, Route } from "lucide-react";
+import { ReportItem, ResourceItem, apiGetShortlist, apiConfirmAllocation, apiResolveIncident, apiUpdateResourceStatus, apiDenyIncidentAndAutoRoute, apiConfirmIncident } from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
+import { VerificationBadge, VerificationPanel } from "@/components/incidents/VerificationBadge";
 
 interface IncidentCardProps {
   incident: ReportItem;
@@ -65,6 +66,25 @@ export function IncidentCard({
     }
   }
 
+  async function handleDispatchRecommended() {
+    const rec = incident.recommended_allocation;
+    if (!rec) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      await apiConfirmAllocation(incident.id, rec.resource_id);
+      setActionSuccess(`Dispatched ${rec.resource_name}`);
+      setShowShortlist(false);
+      if (onUpdate) onUpdate();
+    } catch (err: unknown) {
+      setActionError(
+        err instanceof Error ? err.message : "Failed to dispatch recommended resource"
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   async function handleResolve() {
     setActionLoading(true);
     setActionError(null);
@@ -75,6 +95,29 @@ export function IncidentCard({
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to resolve incident";
       setActionError(msg);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleVerificationConfirm(
+    role: "responder" | "authority" | "admin",
+    manual?: boolean
+  ) {
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      await apiConfirmIncident(incident.id, {
+        by: role,
+        actor_name: role === "admin" ? "District Admin" : undefined,
+        manual_verified: manual,
+      });
+      setActionSuccess(
+        manual ? "Marked as verified" : `Logged ${role} confirmation`
+      );
+      if (onUpdate) onUpdate();
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : "Failed to confirm report");
     } finally {
       setActionLoading(false);
     }
@@ -123,6 +166,8 @@ export function IncidentCard({
             {incident.denied_by_admin && (
               <span className="adm-status adm-status--mute">Auto-routed</span>
             )}
+
+            <VerificationBadge verification={incident.verification} size="xs" />
           </div>
           <p className="flex items-center gap-1 text-xs text-slate-500">
             <MapPin size={13} className="text-slate-400" />
@@ -133,6 +178,12 @@ export function IncidentCard({
           #{incident.id.slice(0, 8)}
         </span>
       </div>
+
+      <VerificationPanel
+        verification={incident.verification}
+        onConfirm={handleVerificationConfirm}
+        busy={actionLoading}
+      />
 
       {incident.description && (
         <p className="mt-2 text-xs text-slate-600 line-clamp-2 bg-slate-50 border border-slate-200 p-2">
@@ -147,6 +198,53 @@ export function IncidentCard({
             alt="Incident evidence"
             className="w-full h-28 object-cover rounded-lg border border-stone-200"
           />
+        </div>
+      )}
+
+      {incident.recommended_allocation && (isUnverified || isVerified) && (
+        <div className="mt-3 border border-indigo-200 bg-indigo-50/70 p-2.5">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-indigo-700">
+            <Sparkles size={12} /> Auto-recommended allocation
+          </div>
+          <div className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-800">
+            <span className="font-bold">{incident.recommended_allocation.resource_name}</span>
+            <span className="text-[10px] uppercase font-semibold text-slate-500 border border-slate-200 px-1 py-0.5">
+              {incident.recommended_allocation.resource_type.replace(/_/g, " ")}
+            </span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600">
+            <span className="flex items-center gap-1">
+              <Route size={10} /> {incident.recommended_allocation.distance_km} km · ~
+              {incident.recommended_allocation.eta_min} min
+            </span>
+            <span
+              className={
+                incident.recommended_allocation.fully_covered
+                  ? "text-emerald-700"
+                  : "text-amber-700"
+              }
+            >
+              {incident.recommended_allocation.allocated}/
+              {incident.recommended_allocation.demand} covered
+            </span>
+            <span className="font-mono text-slate-400">
+              match {incident.recommended_allocation.score}
+            </span>
+          </div>
+          <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+            {incident.recommended_allocation.reason}
+          </p>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDispatchRecommended();
+            }}
+            disabled={actionLoading}
+            className="adm-btn adm-btn--primary mt-2"
+          >
+            <Send size={11} /> Dispatch this resource
+          </button>
         </div>
       )}
 

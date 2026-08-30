@@ -1,29 +1,27 @@
 import { NextResponse } from "next/server";
-import { connectToDatabase } from "@/lib/mongodb";
-import { ResourceModel } from "@/lib/models/Resource";
+import { ensureResourcesHydrated, snapshotResources } from "@/lib/resourceStore";
 
+/**
+ * GET /api/resources
+ *
+ * The live resource pool (shelters, rescue teams, medical units, boats, relief
+ * stock) with location, capacity and status. Served from the in-memory pool,
+ * which hydrates from MongoDB when one is reachable and reflects every
+ * allocation made through /api/allocations/confirm.
+ */
 export async function GET() {
-  try {
-    await connectToDatabase();
-    const resources = await ResourceModel.find().sort({ created_at: 1 });
-
-    const formatted = resources.map((r) => ({
-      id: r._id.toString(),
-      name: r.name,
-      type: r.type,
-      capacity_total: r.capacity_total,
-      capacity_used: r.capacity_used,
-      status: r.status,
-      disaster_types: r.disaster_types,
-      created_at: r.created_at,
-      lat: r.location.coordinates[1],
-      lng: r.location.coordinates[0],
-      location_wkt: `POINT(${r.location.coordinates[0]} ${r.location.coordinates[1]})`,
-    }));
-
-    return NextResponse.json(formatted);
-  } catch (err: any) {
-    console.warn("MongoDB offline, returning empty resources list:", err);
-    return NextResponse.json([]);
-  }
+  await ensureResourcesHydrated();
+  const resources = snapshotResources().map((r) => ({
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    capacity_total: r.capacity_total,
+    capacity_used: r.capacity_used,
+    status: r.status,
+    disaster_types: r.disaster_types,
+    lat: r.lat,
+    lng: r.lng,
+    location_wkt: r.location_wkt,
+  }));
+  return NextResponse.json(resources);
 }

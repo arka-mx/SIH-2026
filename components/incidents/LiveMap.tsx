@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ReportItem, ResourceItem } from "@/lib/api";
+import { ReportItem, ResourceItem, AllocationLine } from "@/lib/api";
 import { RadicalRegionRule, RescuerUnitProfile } from "@/types/rescuer";
 import { getStoredAdminLocation } from "@/lib/adminLocation";
 
@@ -9,6 +9,7 @@ interface LiveMapProps {
   incidents: ReportItem[];
   resources?: ResourceItem[];
   rescuers?: RescuerUnitProfile[];
+  allocations?: AllocationLine[];
   radicalRegions?: RadicalRegionRule[];
   selectedIncidentId?: string | null;
   onSelectIncident?: (incident: ReportItem) => void;
@@ -85,6 +86,7 @@ export function LiveMap({
   incidents = [],
   resources = [],
   rescuers = [],
+  allocations = [],
   radicalRegions = [],
   selectedIncidentId,
   onSelectIncident,
@@ -274,13 +276,44 @@ export function LiveMap({
           if (onSelectIncident) onSelectIncident(inc);
         });
 
+        const sevColor: Record<string, string> = {
+          critical: "#b91c1c",
+          high: "#c2410c",
+          moderate: "#a16207",
+          low: "#3f6212",
+        };
+        const sev = (inc.severity || "").toLowerCase();
+        const verifLabel = inc.verification?.tierLabel;
+        const verifScore = inc.verification?.score;
+        const reportedAt = inc.created_at
+          ? new Date(inc.created_at).toLocaleString([], {
+              day: "2-digit",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : null;
+
         const popup = new window.maplibregl.Popup({ offset: 25 }).setHTML(`
-          <div style="padding: 4px; font-size: 12px; font-family: sans-serif;">
+          <div style="padding: 4px; font-size: 12px; font-family: sans-serif; min-width: 190px;">
             <strong style="text-transform: capitalize; font-size: 13px; display: block; color: #0f172a;">${inc.type} Incident</strong>
-            <span style="display: inline-block; padding: 2px 6px; margin-top: 4px; border-radius: 4px; font-size: 10px; font-weight: 600; ${
-              isVerified ? "background: #d1fae5; color: #065f46;" : isInProgress ? "background: #dbeafe; color: #1e40af;" : "background: #fef3c7; color: #92400e;"
-            }">${statusLabel}</span>
+            <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;">
+              <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; ${
+                isVerified ? "background: #d1fae5; color: #065f46;" : isInProgress ? "background: #dbeafe; color: #1e40af;" : "background: #fef3c7; color: #92400e;"
+              }">${statusLabel}</span>
+              ${
+                sev
+                  ? `<span style="display:inline-block; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:600; text-transform:capitalize; background:${sevColor[sev] || "#475569"}; color:#fff;">${sev} severity</span>`
+                  : ""
+              }
+              ${
+                verifLabel
+                  ? `<span style="display:inline-block; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:600; background:#ede9fe; color:#5b21b6;">${verifLabel}${typeof verifScore === "number" ? ` ${verifScore}` : ""}</span>`
+                  : ""
+              }
+            </div>
             <p style="margin-top: 6px; color: #475569; font-size: 11px;">${inc.description || "Emergency report filed"}</p>
+            ${reportedAt ? `<div style="color:#64748b; font-size:10px; margin-top:4px;">Reported ${reportedAt}${inc.report_count && inc.report_count > 1 ? ` · ${inc.report_count} reports` : ""}</div>` : ""}
             <small style="color: #94a3b8; font-family: monospace; display: block; margin-top: 4px;">ID: ${inc.id.slice(0, 8)}</small>
           </div>
         `);
@@ -395,6 +428,79 @@ export function LiveMap({
         markersRef.current.push(marker);
       });
 
+      // C2b. Persistent allocation connectors (recommended + confirmed).
+      // These stay on the map regardless of selection so the operator can see
+      // the whole coordination picture: which resource is going where.
+      const allocConfirmedSrc = "alloc-confirmed-source";
+      const allocRecommendedSrc = "alloc-recommended-source";
+      const allocConfirmedLayer = "alloc-confirmed-layer";
+      const allocRecommendedLayer = "alloc-recommended-layer";
+
+      const toLineFeature = (a: AllocationLine) => ({
+        type: "Feature" as const,
+        properties: { status: a.status, resource: a.resource_name, eta: a.eta_min },
+        geometry: {
+          type: "LineString" as const,
+          coordinates: [
+            [a.incident_lng, a.incident_lat],
+            [a.resource_lng, a.resource_lat],
+          ],
+        },
+      });
+
+      const validAlloc = allocations.filter(
+        (a) =>
+          Number.isFinite(a.incident_lat) &&
+          Number.isFinite(a.incident_lng) &&
+          Number.isFinite(a.resource_lat) &&
+          Number.isFinite(a.resource_lng)
+      );
+      const confirmedFC = {
+        type: "FeatureCollection" as const,
+        features: validAlloc
+          .filter((a) => a.status === "en_route" || a.status === "at_scene")
+          .map(toLineFeature),
+      };
+      const recommendedFC = {
+        type: "FeatureCollection" as const,
+        features: validAlloc
+          .filter((a) => a.status === "recommended")
+          .map(toLineFeature),
+      };
+
+      const upsertLineLayer = (
+        srcId: string,
+        layerId: string,
+        data: object,
+        paint: Record<string, unknown>
+      ) => {
+        const existing = map.getSource(srcId);
+        if (existing) {
+          existing.setData(data);
+        } else {
+          map.addSource(srcId, { type: "geojson", data });
+          map.addLayer({ id: layerId, type: "line", source: srcId, paint });
+        }
+      };
+
+      upsertLineLayer(allocConfirmedSrc, allocConfirmedLayer, confirmedFC, {
+        "line-color": [
+          "match",
+          ["get", "status"],
+          "at_scene",
+          "#dc2626",
+          "#2563eb",
+        ],
+        "line-width": 3,
+      });
+      upsertLineLayer(allocRecommendedSrc, allocRecommendedLayer, recommendedFC, {
+        "line-color": "#d97706",
+        "line-width": 2.5,
+        "line-dasharray": [2, 2],
+      });
+
+      const allocatedIncidentIds = new Set(validAlloc.map((a) => a.report_id));
+
       // C3. Calculate Nearest Available Resource and render dashed line
       const selectedInc = selectedIncidentId ? incidents.find((i) => i.id === selectedIncidentId) : null;
       let selectedLat: number | undefined;
@@ -417,7 +523,14 @@ export function LiveMap({
 
       let matched: { name: string; type: string; lat: number; lng: number; distance: number } | null = null;
 
-      if (selectedInc && selectedLat !== undefined && selectedLng !== undefined && !isNaN(selectedLat) && !isNaN(selectedLng)) {
+      if (
+        selectedInc &&
+        !allocatedIncidentIds.has(selectedInc.id) &&
+        selectedLat !== undefined &&
+        selectedLng !== undefined &&
+        !isNaN(selectedLat) &&
+        !isNaN(selectedLng)
+      ) {
         let minDistance = Infinity;
 
         // Check Shelters / Supply Centres
@@ -524,7 +637,7 @@ export function LiveMap({
     } else {
       map.once("style.load", renderLayersAndMarkers);
     }
-  }, [incidents, resources, rescuers, radicalRegions, layers, selectedIncidentId, onSelectIncident, isLoaded, activeStyle]);
+  }, [incidents, resources, rescuers, allocations, radicalRegions, layers, selectedIncidentId, onSelectIncident, isLoaded, activeStyle]);
 
   return (
     <div

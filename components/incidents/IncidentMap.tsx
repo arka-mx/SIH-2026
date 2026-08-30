@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { Radio } from "lucide-react";
 import { Card } from "@/components/ui/Card";
-import { ReportItem, ResourceItem } from "@/lib/api";
+import { ReportItem, ResourceItem, AllocationLine } from "@/lib/api";
 import { RadicalRegionRule, RescuerUnitProfile } from "@/types/rescuer";
 
 const DynamicLiveMap = dynamic(
@@ -23,6 +23,7 @@ interface IncidentMapProps {
   incidents?: ReportItem[];
   resources?: ResourceItem[];
   rescuers?: RescuerUnitProfile[];
+  allocations?: AllocationLine[];
   radicalRegions?: RadicalRegionRule[];
   selectedIncidentId?: string | null;
   onSelectIncident?: (incident: ReportItem) => void;
@@ -33,6 +34,7 @@ export function IncidentMap({
   incidents = [],
   resources = [],
   rescuers = [],
+  allocations = [],
   radicalRegions = [],
   selectedIncidentId,
   onSelectIncident,
@@ -52,6 +54,7 @@ export function IncidentMap({
         incidents={incidents}
         resources={resources}
         rescuers={rescuers}
+        allocations={allocations}
         radicalRegions={radicalRegions}
         selectedIncidentId={selectedIncidentId}
         onSelectIncident={onSelectIncident}
@@ -72,6 +75,12 @@ export function IncidentMap({
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 border-2 border-emerald-600 bg-white" /> Rescuer GPS
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-0 border-t-2 border-dashed border-amber-500" /> Recommended match
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-4 h-0 border-t-2 border-blue-600" /> Confirmed dispatch
         </span>
         <span className="flex items-center gap-1.5 text-rose-700">
           <span className="w-2.5 h-2.5 border border-rose-500 bg-rose-100" /> High-risk zone

@@ -1,3 +1,6 @@
+import { readFile, writeFile } from "fs/promises";
+import path from "path";
+import os from "os";
 import { connectToDatabase } from "@/lib/mongodb";
 import { SafeShareModel } from "@/lib/models/SafeShare";
 import { SafeStatusView, normalizeStatus } from "@/lib/safeShare";
@@ -15,6 +18,31 @@ const globalKey = "__momentum_safe_shares__";
 const g = global as unknown as Record<string, Map<string, SafeStatusView>>;
 const memory: Map<string, SafeStatusView> = g[globalKey] || (g[globalKey] = new Map());
 
+/**
+ * Disk fallback so a shared link survives a dev-server restart when MongoDB is
+ * offline (the usual case in development / demos). The in-process Map stays the
+ * fast path; this is just durability.
+ */
+const DISK_PATH = path.join(os.tmpdir(), "momentum-safe-shares.json");
+
+async function readDisk(): Promise<Record<string, SafeStatusView>> {
+  try {
+    return JSON.parse(await readFile(DISK_PATH, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+async function writeDisk(snapshot: SafeStatusView): Promise<void> {
+  try {
+    const all = await readDisk();
+    all[snapshot.id] = snapshot;
+    await writeFile(DISK_PATH, JSON.stringify(all), "utf8");
+  } catch (err) {
+    console.warn("putSafeShare: disk persistence skipped:", err);
+  }
+}
+
 export async function putSafeShare(snapshot: SafeStatusView): Promise<SafeStatusView> {
   const clean: SafeStatusView = {
     ...snapshot,
@@ -22,6 +50,7 @@ export async function putSafeShare(snapshot: SafeStatusView): Promise<SafeStatus
     updatedAt: snapshot.updatedAt || new Date().toISOString(),
   };
   memory.set(clean.id, clean);
+  await writeDisk(clean);
 
   try {
     await connectToDatabase();
@@ -58,6 +87,12 @@ export async function getSafeShare(id: string): Promise<SafeStatusView | null> {
 
   const mem = memory.get(trimmed);
   if (mem) return mem;
+
+  const onDisk = (await readDisk())[trimmed];
+  if (onDisk) {
+    memory.set(trimmed, onDisk);
+    return onDisk;
+  }
 
   try {
     await connectToDatabase();

@@ -97,10 +97,15 @@ export function buildSafeSnapshot(report: ReportLike): SafeStatusView {
 
   let lat = typeof report.lat === "number" ? report.lat : report.latitude ?? NaN;
   let lng = typeof report.lng === "number" ? report.lng : report.longitude ?? NaN;
-  if (Number.isNaN(lat) || Number.isNaN(lng)) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     const fromWkt = coordsFromWkt(report.location_wkt);
     if (fromWkt) [lat, lng] = fromWkt;
   }
+  // The public view type requires numbers, and JSON.stringify turns NaN into
+  // null — which fails isSafeSnapshot on the server and 404s the shared link.
+  // Fall back to 0 (the /safe page treats 0,0 as "location not shared").
+  if (!Number.isFinite(lat)) lat = 0;
+  if (!Number.isFinite(lng)) lng = 0;
 
   const now = new Date().toISOString();
   return {

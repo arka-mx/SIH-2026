@@ -349,6 +349,52 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .citizen-submit { background:#1d4ed8; }
 .citizen-submit:hover { background:#1e40af; }
 
+/* ── Public "I'm safe" check-in view (/safe/[id]) ─────────────────────── */
+.safe-view { width:min(680px, calc(100% - 40px)); margin:36px auto 64px; display:grid; gap:16px; }
+.safe-card { padding:24px; border:1px solid var(--ph-border-strong); border-top:3px solid var(--ph-accent); background:var(--ph-surface); box-shadow:var(--ph-panel-shadow); }
+.safe-card--green { border-top-color:var(--ph-green); }
+.safe-card--blue  { border-top-color:#1d4ed8; }
+.safe-card--amber { border-top-color:#b45309; }
+.safe-card--mute  { border-top-color:#64748b; }
+.safe-card--center { text-align:center; display:grid; gap:10px; justify-items:center; }
+
+.safe-banner { display:grid; gap:10px; }
+.safe-banner__row { display:flex; align-items:center; gap:13px; }
+.safe-banner__icon { display:grid; place-items:center; width:44px; height:44px; flex-shrink:0; color:#fff; background:var(--ph-accent); }
+.safe-card--green .safe-banner__icon { background:var(--ph-green); }
+.safe-card--blue  .safe-banner__icon { background:#1d4ed8; }
+.safe-card--amber .safe-banner__icon { background:#b45309; }
+.safe-card--mute  .safe-banner__icon { background:#64748b; }
+.safe-banner .eyebrow { color:var(--ph-ink-mute); margin:0; }
+.safe-banner h1 { margin:2px 0 0; font-size:1.3rem; font-weight:800; letter-spacing:-.01em; color:var(--ph-ink); }
+.safe-banner > p { margin:0; color:var(--ph-ink-soft); font-size:13px; line-height:1.55; }
+.safe-updated { display:inline-flex; align-items:center; gap:7px; padding:5px 10px; border:1px solid var(--ph-border); background:var(--ph-surface-alt); color:var(--ph-ink-mute); font-size:11px; font-weight:700; letter-spacing:.03em; }
+.safe-updated i { width:7px; height:7px; border-radius:50%; background:var(--ph-green); font-style:normal; }
+
+.safe-kv { margin:2px 0 0; border-top:1px solid var(--ph-border); }
+.safe-kv > div { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:11px 0; border-bottom:1px solid var(--ph-border); }
+.safe-kv .k { color:var(--ph-ink-mute); font-size:10px; font-weight:800; letter-spacing:.13em; text-transform:uppercase; flex-shrink:0; }
+.safe-kv .v { margin:0; text-align:right; color:var(--ph-ink); font-size:13px; font-weight:600; line-height:1.5; }
+.safe-kv .v--mono { font-family:ui-monospace, "SFMono-Regular", Menlo, monospace; font-size:12px; }
+
+.safe-map { border:1px solid var(--ph-border-strong); }
+.safe-map iframe { display:block; width:100%; height:220px; border:0; }
+.safe-map a { display:block; padding:9px; border-top:1px solid var(--ph-border); background:var(--ph-surface-alt); color:var(--ph-accent); font-size:11px; font-weight:800; letter-spacing:.04em; text-align:center; }
+
+.safe-note { padding:12px 14px; border:1px solid var(--ph-border); border-left:3px solid var(--ph-green); background:var(--ph-surface-alt); }
+.safe-note .k { display:block; margin-bottom:5px; color:var(--ph-ink-mute); font-size:10px; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
+.safe-note p { margin:0; color:var(--ph-ink); font-size:13px; line-height:1.5; }
+
+.safe-meta { display:flex; flex-wrap:wrap; gap:6px 18px; padding-top:2px; color:var(--ph-ink-mute); font-size:11px; font-weight:600; }
+.safe-meta span { display:inline-flex; align-items:center; gap:6px; }
+
+.safe-foot { display:grid; gap:12px; justify-items:center; text-align:center; }
+.safe-foot p { max-width:440px; margin:0; color:var(--ph-ink-mute); font-size:11px; line-height:1.6; }
+.safe-foot a { color:var(--ph-accent); font-size:12px; font-weight:800; }
+
+.safe-home-btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:42px; margin-top:6px; padding:11px 18px; border:0; background:var(--ph-accent); color:#fff; font-size:12px; font-weight:800; letter-spacing:.03em; }
+.safe-home-btn:hover { background:#9a3412; }
+
 .citizen-frame { display:grid; grid-template-columns:190px minmax(0, 1fr); gap:24px; width:min(1440px, calc(100% - 32px)); margin:18px auto 0; }
 .citizen-sidebar { display:flex; flex-direction:column; gap:8px; padding:12px 10px; border:1px solid #d2ae82; border-radius:16px; background:#fff4df; box-shadow:inset 2px 2px 6px #fffdf4, 4px 5px 10px rgba(104,70,42,0.15); }
 .citizen-sidebar .nav-link { color:#876d5e; }

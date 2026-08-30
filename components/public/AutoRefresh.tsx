@@ -10,9 +10,11 @@ import { RefreshCw } from "lucide-react";
  */
 export function AutoRefresh({ seconds = 45 }: { seconds?: number }) {
   const router = useRouter();
-  const [refreshedAt, setRefreshedAt] = useState<Date>(new Date());
+  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
 
   useEffect(() => {
+    setRefreshedAt(new Date());
+
     function refresh() {
       router.refresh();
       setRefreshedAt(new Date());
@@ -40,7 +42,9 @@ export function AutoRefresh({ seconds = 45 }: { seconds?: number }) {
       className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-stone-500 hover:text-stone-700"
     >
       <RefreshCw size={12} />
-      Live · updated {refreshedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+      Live{refreshedAt
+        ? ` · updated ${refreshedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+        : ""}
     </button>
   );
 }

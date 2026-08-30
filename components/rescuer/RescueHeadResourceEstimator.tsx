@@ -39,26 +39,32 @@ export function RescueHeadResourceEstimator({
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Input states
-  const [foodKits, setFoodKits] = useState<number>(30);
-  const [waterLiters, setWaterLiters] = useState<number>(150);
-  const [medicalKits, setMedicalKits] = useState<number>(8);
-  const [lifeJackets, setLifeJackets] = useState<number>(20);
-  const [fuelLiters, setFuelLiters] = useState<number>(50);
-  const [equipment, setEquipment] = useState<string>("Hydraulic Cutters, Searchlights & Inflatable Boat");
-  const [areaRadius, setAreaRadius] = useState<number>(3.0);
+  // Input states — start blank until the head calculates a baseline or edits.
+  const [foodKits, setFoodKits] = useState<number>(0);
+  const [waterLiters, setWaterLiters] = useState<number>(0);
+  const [medicalKits, setMedicalKits] = useState<number>(0);
+  const [lifeJackets, setLifeJackets] = useState<number>(0);
+  const [fuelLiters, setFuelLiters] = useState<number>(0);
+  const [equipment, setEquipment] = useState<string>("");
+  const [areaRadius, setAreaRadius] = useState<number>(2);
 
-  const incidentId = assignedIncident?.id || "INC-EMERGENCY-HUB";
-  const locationName = assignedIncident?.address || assignedIncident?.description?.split("]")[0]?.replace("[", "") || "Target Sector Area";
+  const incidentId = assignedIncident?.id;
+  const locationName =
+    assignedIncident?.address ||
+    assignedIncident?.description?.split("]")[0]?.replace("[", "") ||
+    "";
 
-  // Parse people count or requests count
-  const peopleCount = 12; // Standard estimation fallback for active area sector
-  const requestsCount = 3;
+  // Demand signal derived from the linked incident cluster.
+  const requestsCount =
+    assignedIncident?.report_count ?? assignedIncident?.cluster_count ?? 0;
+  // Assume an average household size per logged report when no headcount is available.
+  const peopleCount = requestsCount > 0 ? requestsCount * 4 : 0;
 
   // Load existing estimation for this incident if available
   useEffect(() => {
+    if (!incidentId) return;
     async function loadEst() {
-      const existing = await apiGetHeadResourceEstimation(incidentId, rescuerId);
+      const existing = await apiGetHeadResourceEstimation(incidentId!, rescuerId);
       if (existing) {
         setEstimation(existing);
         setFoodKits(existing.estimatedFoodKits);
@@ -73,32 +79,32 @@ export function RescueHeadResourceEstimator({
     loadEst();
   }, [incidentId, rescuerId]);
 
-  // Auto-calculate smart baseline based on area & SOS requests
+  // Auto-calculate smart baseline from the incident's demand signal.
   function handleAutoCalculate() {
-    const calcFood = Math.max(15, peopleCount * 3 + 10);
-    const calcWater = Math.max(80, peopleCount * 10 + 50);
-    const calcMedical = Math.max(4, Math.ceil(peopleCount / 3) + 2);
-    const calcJackets = Math.max(10, peopleCount + 5);
-    const calcFuel = 50;
+    if (peopleCount <= 0) {
+      setSuccessMsg("No headcount signal on the linked incident — enter quotas manually.");
+      setTimeout(() => setSuccessMsg(null), 3500);
+      return;
+    }
+    setFoodKits(Math.max(15, peopleCount * 3 + 10));
+    setWaterLiters(Math.max(80, peopleCount * 10 + 50));
+    setMedicalKits(Math.max(4, Math.ceil(peopleCount / 3) + 2));
+    setLifeJackets(Math.max(10, peopleCount + 5));
+    setFuelLiters(Math.max(20, Math.ceil(areaRadius * 15)));
 
-    setFoodKits(calcFood);
-    setWaterLiters(calcWater);
-    setMedicalKits(calcMedical);
-    setLifeJackets(calcJackets);
-    setFuelLiters(calcFuel);
-
-    setSuccessMsg("Loaded auto-calculated baseline ratios based on area requests count!");
+    setSuccessMsg(`Baseline computed for ~${peopleCount} people across ${requestsCount} reports.`);
     setTimeout(() => setSuccessMsg(null), 3000);
   }
 
   async function handleConfirmEstimation(e: React.FormEvent) {
     e.preventDefault();
+    if (!incidentId) return;
     setLoading(true);
     try {
       const payload: Partial<HeadResourceEstimation> = {
         incidentId,
         unitId: rescuerId,
-        leaderName: leaderName || "Rescue Team Commander",
+        leaderName,
         locationName,
         areaRadiusKm: areaRadius,
         totalRequestsCount: requestsCount,
@@ -136,16 +142,30 @@ export function RescueHeadResourceEstimator({
           </p>
         </div>
 
-        <button type="button" onClick={handleAutoCalculate} className="adm-btn">
+        <button
+          type="button"
+          onClick={handleAutoCalculate}
+          className="adm-btn"
+          disabled={!assignedIncident}
+        >
           <Calculator size={14} /> Auto-calculate baseline
         </button>
       </div>
+
+      {!assignedIncident && (
+        <div className="adm-note">
+          <span>
+            No active incident is linked to this unit yet. Accept a dispatch on the assignment
+            card above to broadcast a resource plan.
+          </span>
+        </div>
+      )}
 
       {/* Sector analysis */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="adm-kv">
           <span className="flex items-center gap-1.5"><MapPin size={14} className="text-slate-500" /> Target sector</span>
-          <strong className="truncate">{locationName}</strong>
+          <strong className="truncate">{locationName || "Not linked"}</strong>
         </div>
         <div className="adm-kv">
           <span className="flex items-center gap-1.5"><Radio size={14} className="text-slate-500" /> Admin SOS</span>
@@ -203,7 +223,7 @@ export function RescueHeadResourceEstimator({
           />
         </label>
 
-        <button type="submit" disabled={loading} className="adm-btn adm-btn--primary w-full justify-center">
+        <button type="submit" disabled={loading || !assignedIncident} className="adm-btn adm-btn--primary w-full justify-center">
           <Send size={15} />
           {loading ? "Broadcasting…" : "Confirm & broadcast team resource plan"}
         </button>

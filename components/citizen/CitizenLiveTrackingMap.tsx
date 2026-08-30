@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ReportItem, calcDistanceKm, apiPollRescuerMovement } from "@/lib/api";
 import { RescuerUnitProfile } from "@/types/rescuer";
-import { Navigation, Phone, ShieldAlert, CheckCircle2, Clock, MapPin, Radio, Zap, AlertTriangle } from "lucide-react";
+import { Navigation, Phone, ShieldAlert, CheckCircle2, Clock, MapPin, Radio, Zap, AlertTriangle, Crosshair } from "lucide-react";
 
 interface CitizenLiveTrackingMapProps {
   incident: ReportItem;
@@ -30,6 +30,9 @@ export function CitizenLiveTrackingMap({ incident, onIncidentUpdated }: CitizenL
   const mapInstanceRef = useRef<any>(null);
   const citizenMarkerRef = useRef<any>(null);
   const rescuerMarkerRef = useRef<any>(null);
+  // While set (a few seconds after a manual "Reset view"), the live rescuer
+  // auto-fit is suppressed so the view stays where the citizen put it.
+  const suppressAutoFitUntilRef = useRef<number>(0);
 
   const [currentIncident, setCurrentIncident] = useState<ReportItem>(incident);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
@@ -209,12 +212,24 @@ export function CitizenLiveTrackingMap({ incident, onIncidentUpdated }: CitizenL
         });
       }
 
-      // Fit map bounds to encompass citizen and rescuer
-      const bounds = new window.maplibregl.LngLatBounds()
-        .extend([citizenLng, citizenLat])
-        .extend([rescuer.lng, rescuer.lat]);
-      map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
+      // Fit map bounds to encompass citizen and rescuer (unless the citizen just
+      // hit "Reset view" — respect their chosen framing for a few seconds).
+      if (Date.now() >= suppressAutoFitUntilRef.current) {
+        const bounds = new window.maplibregl.LngLatBounds()
+          .extend([citizenLng, citizenLat])
+          .extend([rescuer.lng, rescuer.lat]);
+        map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
+      }
     }
+  }
+
+  // Recenter on the citizen's emergency location (the SOS coordinates), undoing
+  // any drift from the live auto-fit that follows the moving rescuer unit.
+  function resetView() {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    suppressAutoFitUntilRef.current = Date.now() + 12000;
+    map.easeTo({ center: [citizenLng, citizenLat], zoom: 15, pitch: 30, bearing: 0, duration: 500 });
   }
 
   return (
@@ -294,6 +309,15 @@ export function CitizenLiveTrackingMap({ incident, onIncidentUpdated }: CitizenL
       {/* Map Container */}
       <div className="relative w-full h-[360px] bg-slate-100">
         <div ref={mapContainerRef} className="w-full h-full" />
+
+        <button
+          type="button"
+          onClick={resetView}
+          title="Recenter on your emergency location"
+          className="absolute top-3 right-3 z-10 flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold text-slate-900 bg-white/90 backdrop-blur-md border border-slate-300 rounded-lg shadow-md hover:bg-white cursor-pointer"
+        >
+          <Crosshair size={12} /> Reset view
+        </button>
 
         {!isLoaded && (
           <div className="absolute inset-0 bg-stone-100/90 backdrop-blur-xs flex items-center justify-center text-xs font-semibold text-stone-600 gap-2">
