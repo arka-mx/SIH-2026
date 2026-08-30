@@ -33,6 +33,9 @@ import { CitizenLiveTrackingMap } from "@/components/citizen/CitizenLiveTracking
 import { WeatherWidget } from "@/components/ui/WeatherWidget";
 import { useLanguage } from "@/lib/language";
 
+/** Minimum wait between re-sending an SOS for the same active report. */
+const RESEND_COOLDOWN_MS = 2 * 60 * 1000;
+
 export function CitizenDashboard() {
   const { t: translate } = useLanguage();
   const t = new Proxy({} as Record<string, string>, {
@@ -49,7 +52,8 @@ export function CitizenDashboard() {
   const [injured, setInjured] = useState<string>("0");
   const [casualties, setCasualties] = useState<string>("0");
   const [isSafe, setIsSafe] = useState<boolean>(false);
-  
+  const [citizenName, setCitizenName] = useState<string>("");
+
   const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -355,8 +359,6 @@ export function CitizenDashboard() {
       setResending(false);
     }
   }
-
-  const t = TRANSLATIONS[lang];
 
   const dispatched = Boolean(submittedReport?.assigned_rescuer);
   const reportOpen =
