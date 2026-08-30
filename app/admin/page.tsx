@@ -139,6 +139,7 @@ export default function AdminPage() {
 
       <RegisteredTeamHeadsManager
         incidents={incidents}
+        selectedIncident={selectedIncident}
         onRefreshData={fetchFreshData}
       />
 

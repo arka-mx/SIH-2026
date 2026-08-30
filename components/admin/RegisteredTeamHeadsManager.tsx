@@ -17,15 +17,18 @@ import {
   CheckCircle2,
   AlertTriangle,
   Radio,
+  Target,
 } from "lucide-react";
 
 interface RegisteredTeamHeadsManagerProps {
   incidents: ReportItem[];
+  selectedIncident?: ReportItem | null;
   onRefreshData?: () => void;
 }
 
 export function RegisteredTeamHeadsManager({
   incidents,
+  selectedIncident,
   onRefreshData,
 }: RegisteredTeamHeadsManagerProps) {
   const [teamHeads, setTeamHeads] = useState<TeamHeadContactRecord[]>([]);
@@ -84,6 +87,33 @@ export function RegisteredTeamHeadsManager({
     (i) => i.status === "verified" || i.status === "in_progress" || i.status === "unverified"
   );
 
+  const selectedCoords = selectedIncident ? getIncidentCoords(selectedIncident) : null;
+
+  // Sort Rescue Team Heads in ASCENDING order of their distance from the selected report
+  const sortedTeamHeads = [...teamHeads]
+    .map((head) => {
+      let distToSelected: number | null = null;
+      if (
+        selectedCoords &&
+        typeof head.officeLat === "number" &&
+        typeof head.officeLng === "number"
+      ) {
+        distToSelected = getDistanceKm(
+          head.officeLat,
+          head.officeLng,
+          selectedCoords.lat,
+          selectedCoords.lng
+        );
+      }
+      return { ...head, distToSelected };
+    })
+    .sort((a, b) => {
+      if (a.distToSelected !== null && b.distToSelected !== null) {
+        return a.distToSelected - b.distToSelected;
+      }
+      return 0;
+    });
+
   async function handleAssign(teamId: string) {
     const incidentId = selectedIncidentPerHead[teamId];
     if (!incidentId) return;
@@ -110,16 +140,32 @@ export function RegisteredTeamHeadsManager({
       <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-200">
         <div>
           <span className="eyebrow flex items-center gap-1.5">
-            <Radio size={14} className="text-[#115e59]" /> Regional Command & Dispatch
+            <Radio size={14} className="text-[#115e59]" /> Regional Command &amp; Dispatch
           </span>
           <h2 className="section-title mt-0.5">
-            Registered Rescue Team Heads & Proximity Task Assignment
+            Registered Rescue Team Heads &amp; Proximity Task Assignment
           </h2>
         </div>
         <span className="adm-status adm-status--blue font-mono text-xs">
           {teamHeads.length} Registered Team Heads
         </span>
       </div>
+
+      {/* Selected Report Banner */}
+      {selectedIncident && (
+        <div className="p-3 bg-teal-50 border border-teal-200 text-xs text-teal-900 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2 font-bold">
+            <Target size={16} className="text-[#115e59]" />
+            <span>
+              Sorted by ascending distance to selected report:{" "}
+              <strong className="underline font-mono">#{selectedIncident.id}</strong> ({selectedIncident.type.toUpperCase()})
+            </span>
+          </div>
+          <span className="text-[11px] text-teal-700 font-mono font-medium">
+            Closest Rescue Team Head listed first ⬇
+          </span>
+        </div>
+      )}
 
       {toastMsg && (
         <div className="adm-note flex items-center gap-2 text-xs font-semibold text-emerald-900 bg-emerald-50 border-emerald-300">
@@ -138,7 +184,7 @@ export function RegisteredTeamHeadsManager({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {teamHeads.map((head) => {
+          {sortedTeamHeads.map((head) => {
             // Sort active incidents by proximity to this Team Head's office
             const incidentsWithDist = activeIncidents
               .map((inc) => {
@@ -155,7 +201,8 @@ export function RegisteredTeamHeadsManager({
 
             const closestInc = incidentsWithDist[0];
             const currentSelected =
-              selectedIncidentPerHead[head.teamId] || (closestInc ? closestInc.id : "");
+              selectedIncidentPerHead[head.teamId] ||
+              (selectedIncident ? selectedIncident.id : closestInc ? closestInc.id : "");
 
             return (
               <div
@@ -197,6 +244,18 @@ export function RegisteredTeamHeadsManager({
                       : "Available"}
                   </span>
                 </div>
+
+                {/* Distance to Selected Report Badge */}
+                {selectedIncident && head.distToSelected !== null && (
+                  <div className="bg-teal-50 border border-teal-200 p-2 text-xs text-teal-900 flex items-center justify-between font-medium">
+                    <span className="flex items-center gap-1.5 font-semibold">
+                      <Target size={13} className="text-[#115e59]" /> Distance to Report #{selectedIncident.id}:
+                    </span>
+                    <span className="font-mono font-bold text-teal-800 bg-teal-100 px-2 py-0.5 rounded text-xs">
+                      {head.distToSelected} km
+                    </span>
+                  </div>
+                )}
 
                 {/* Contact Phone & Base Coordinates */}
                 <div className="grid grid-cols-2 gap-2 text-xs pt-1">

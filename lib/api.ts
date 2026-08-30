@@ -1434,7 +1434,7 @@ export async function apiGetIncidentsForOfficeRegion(
 import { VolunteerPledge } from "@/types/rescuer";
 export type { VolunteerPledge } from "@/types/rescuer";
 
-let inMemoryVolunteerPledges: VolunteerPledge[] = [
+let inMemoryVolunteerPledges: VolunteerPledge[] = loadFromStorage("volunteer_pledges", [
   {
     id: "VOL-801",
     volunteerName: "Rajesh Mohanty",
@@ -1491,11 +1491,12 @@ let inMemoryVolunteerPledges: VolunteerPledge[] = [
     status: "pending_team_head",
     submittedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
   },
-];
+]);
 
 export async function apiSubmitVolunteerRequest(
   pledge: Partial<VolunteerPledge>
 ): Promise<VolunteerPledge> {
+  inMemoryVolunteerPledges = loadFromStorage("volunteer_pledges", inMemoryVolunteerPledges);
   const newPledge: VolunteerPledge = {
     id: "VOL-" + Math.floor(100 + Math.random() * 900),
     volunteerName: pledge.volunteerName || "Community Volunteer",
@@ -1508,15 +1509,35 @@ export async function apiSubmitVolunteerRequest(
     lat: pledge.lat || 19.076,
     lng: pledge.lng || 72.8777,
     status: "pending_team_head",
+    deviceId: pledge.deviceId,
     submittedAt: new Date().toISOString(),
   };
 
   inMemoryVolunteerPledges.unshift(newPledge);
+  saveToStorage("volunteer_pledges", inMemoryVolunteerPledges);
   return newPledge;
 }
 
 export async function apiGetAllVolunteerPledges(): Promise<VolunteerPledge[]> {
+  inMemoryVolunteerPledges = loadFromStorage("volunteer_pledges", inMemoryVolunteerPledges);
   return inMemoryVolunteerPledges;
+}
+
+export async function apiGetActiveVolunteerPledgeForDevice(deviceId: string): Promise<VolunteerPledge | null> {
+  inMemoryVolunteerPledges = loadFromStorage("volunteer_pledges", inMemoryVolunteerPledges);
+  const found = inMemoryVolunteerPledges.find(
+    (v) =>
+      v.deviceId === deviceId &&
+      v.status !== "mobilized"
+  );
+  return found || null;
+}
+
+export async function apiCancelVolunteerPledge(pledgeId: string): Promise<boolean> {
+  inMemoryVolunteerPledges = loadFromStorage("volunteer_pledges", inMemoryVolunteerPledges);
+  inMemoryVolunteerPledges = inMemoryVolunteerPledges.filter((v) => v.id !== pledgeId);
+  saveToStorage("volunteer_pledges", inMemoryVolunteerPledges);
+  return true;
 }
 
 export async function apiGetVolunteerPledgesForHead(
@@ -1524,6 +1545,7 @@ export async function apiGetVolunteerPledgesForHead(
   officeLng?: number,
   radiusKm: number = 30
 ): Promise<VolunteerPledge[]> {
+  inMemoryVolunteerPledges = loadFromStorage("volunteer_pledges", inMemoryVolunteerPledges);
   if (!officeLat || !officeLng) return inMemoryVolunteerPledges;
 
   return inMemoryVolunteerPledges.filter((vol) => {

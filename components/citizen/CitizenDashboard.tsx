@@ -18,10 +18,13 @@ import {
   apiReverseGeocodeDetailed,
   apiGetIncidentById, 
   apiGetActiveReportForSession,
+  apiGetActiveVolunteerPledgeForDevice,
+  apiCancelVolunteerPledge,
   apiPublishSafeShare,
   apiCancelSos,
   ReportItem
 } from "@/lib/api";
+import { VolunteerPledge } from "@/types/rescuer";
 import { getOrCreateDeviceId } from "@/lib/device";
 import {
   getCitizenProfile,
@@ -78,6 +81,9 @@ export function CitizenDashboard() {
   const resendMsLeft = lastSosAt ? Math.max(0, lastSosAt + RESEND_COOLDOWN_MS - nowTs) : 0;
   const canResend = lastSosAt > 0 && resendMsLeft === 0;
 
+  const [activePledge, setActivePledge] = useState<VolunteerPledge | null>(null);
+  const [cancellingPledge, setCancellingPledge] = useState<boolean>(false);
+
   /** Mark the active report cancelled everywhere and drop it from the citizen view. */
   function abortActiveReportLocally(cancelledReport: ReportItem) {
     const cancelled = { ...cancelledReport, status: "cancelled" as const };
@@ -102,6 +108,19 @@ export function CitizenDashboard() {
       setError(err instanceof Error ? err.message : "Could not cancel the SOS. Please try again.");
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function handleCancelPledge() {
+    if (!activePledge || cancellingPledge) return;
+    setCancellingPledge(true);
+    try {
+      await apiCancelVolunteerPledge(activePledge.id);
+      setActivePledge(null);
+    } catch (err) {
+      setError("Could not cancel volunteer pledge.");
+    } finally {
+      setCancellingPledge(false);
     }
   }
 
@@ -169,7 +188,12 @@ export function CitizenDashboard() {
       }
 
       try {
-        const active = await apiGetActiveReportForSession(devId);
+        const [active, pledge] = await Promise.all([
+          apiGetActiveReportForSession(devId),
+          apiGetActiveVolunteerPledgeForDevice(devId),
+        ]);
+        setActivePledge(pledge);
+
         if (active) {
           // Server is source of truth when it has the report.
           cacheActiveReport(active);
@@ -418,6 +442,43 @@ export function CitizenDashboard() {
         </Link>
       </div>
 
+      {/* Active Volunteer Pledge Card */}
+      {activePledge && (
+        <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-lg space-y-3 mb-6">
+          <div className="flex items-start justify-between flex-wrap gap-2">
+            <div>
+              <span className="eyebrow text-emerald-800">Active Volunteer Resource Pledge</span>
+              <h3 className="font-bold text-base text-emerald-950 mt-0.5">
+                {activePledge.assetType} ({activePledge.capacity})
+              </h3>
+              <p className="text-xs text-emerald-700 mt-1">
+                Pledged by <strong>{activePledge.volunteerName}</strong> ({activePledge.contactPhone}) at {activePledge.locationName}.
+              </p>
+            </div>
+            <span className="adm-status adm-status--green text-xs font-bold">
+              {activePledge.status === "assigned_by_admin"
+                ? "Assigned to Rescue Team Head"
+                : "Awaiting Command Match"}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-emerald-200">
+            <span className="text-[11px] text-emerald-800">
+              Need to cancel your pledge before confirmation?
+            </span>
+            <button
+              type="button"
+              onClick={handleCancelPledge}
+              disabled={cancellingPledge}
+              className="adm-btn adm-btn--danger text-xs font-bold"
+            >
+              <X size={13} />
+              {cancellingPledge ? "Cancelling..." : "Cancel Volunteer Pledge"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="adm-note" style={{ borderLeftColor: "var(--c-red)", marginBottom: 16 }}>
           <AlertTriangle size={16} style={{ color: "var(--c-red)" }} />
@@ -575,7 +636,38 @@ export function CitizenDashboard() {
             </div>
 
             <div className="cz-modal__body">
-              {activeExistingReport ? (
+              {activePledge ? (
+                <>
+                  <div className="adm-note" style={{ borderLeftColor: "var(--c-amber)" }}>
+                    <AlertTriangle size={16} className="text-amber-600" />
+                    <span>
+                      You currently have an active Volunteer Resource Pledge (<strong>{activePledge.assetType}</strong>). A citizen cannot report an emergency SOS and pledge resources at the same time.
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await handleCancelPledge();
+                      }}
+                      disabled={cancellingPledge}
+                      className="adm-btn adm-btn--danger"
+                      style={{ justifyContent: "center" }}
+                    >
+                      <X size={14} />
+                      {cancellingPledge ? "Cancelling pledge..." : "Cancel Volunteer Pledge & Report SOS"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsModalOpen(false)}
+                      className="adm-btn"
+                      style={{ justifyContent: "center" }}
+                    >
+                      Keep Active Pledge
+                    </button>
+                  </div>
+                </>
+              ) : activeExistingReport ? (
                 <>
                   <div className="adm-note">
                     <AlertTriangle size={16} />
