@@ -102,13 +102,14 @@ export function TeamHeadVolunteerPool({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {pledges.map((vol) => {
+            const isAssignedByAdmin = vol.status === "assigned_by_admin";
             const isApproved = vol.status === "approved_by_head" || vol.status === "mobilized";
             const isMobilized = vol.status === "mobilized";
 
             return (
               <div
                 key={vol.id}
-                className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 shadow-sm space-y-2 flex flex-col justify-between"
+                className="p-4 bg-slate-900 text-white border border-slate-800 shadow-xs space-y-2 flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-start justify-between gap-2">
@@ -121,14 +122,22 @@ export function TeamHeadVolunteerPool({
                       </p>
                     </div>
 
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                    <span className={`text-[10px] font-bold px-2 py-0.5 border whitespace-nowrap ${
                       isMobilized
                         ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                         : isApproved
                         ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                        : isAssignedByAdmin
+                        ? "bg-blue-500/20 text-blue-300 border-blue-500/40"
                         : "bg-amber-500/20 text-amber-300 border-amber-500/40"
                     }`}>
-                      {isMobilized ? "⚡ Mobilized to Scene" : isApproved ? "✓ Approved by Head" : "⏳ Pending Head Review"}
+                      {isMobilized
+                        ? "⚡ Mobilized to Scene"
+                        : isApproved
+                        ? "✓ Approved by Head"
+                        : isAssignedByAdmin
+                        ? "👑 Assigned by Admin Head"
+                        : "⏳ Pending Head Review"}
                     </span>
                   </div>
 

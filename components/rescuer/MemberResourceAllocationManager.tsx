@@ -1,6 +1,12 @@
-"use client";
-
-import { useEffect, useState } from "react";
+import {
+  apiGetTeamMembers,
+  apiAddTeamMember,
+  apiGetMemberAllocations,
+  apiCreateMemberAllocation,
+  TeamMember,
+  MemberOrderAllocation,
+  ResourceRequirementItem,
+} from "@/lib/api";
 import {
   PackagePlus,
   Users,
@@ -16,15 +22,10 @@ import {
   ChevronRight,
   Shield,
   Layers,
+  UserPlus,
+  Phone,
+  HardHat,
 } from "lucide-react";
-import {
-  apiGetTeamMembers,
-  apiGetMemberAllocations,
-  apiCreateMemberAllocation,
-  TeamMember,
-  MemberOrderAllocation,
-  ResourceRequirementItem,
-} from "@/lib/api";
 
 interface MemberResourceAllocationManagerProps {
   teamId: string;
@@ -188,6 +189,39 @@ export function MemberResourceAllocationManager({
     0
   );
 
+  // New Member Registration State
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [newMemName, setNewMemName] = useState("");
+  const [newMemCallsign, setNewMemCallsign] = useState("");
+  const [newMemPhone, setNewMemPhone] = useState("");
+  const [newMemRole, setNewMemRole] = useState("");
+
+  async function handleAddMember(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newMemName.trim()) return;
+
+    try {
+      await apiAddTeamMember({
+        name: newMemName.trim(),
+        callsign: newMemCallsign.trim() || "FIELD-RESCUER",
+        phone: newMemPhone.trim() || "+91 94371 00000",
+        role: newMemRole.trim() || "Field Rescue Specialist",
+        status: "active",
+      });
+
+      setNewMemName("");
+      setNewMemCallsign("");
+      setNewMemPhone("");
+      setNewMemRole("");
+      setShowAddMember(false);
+      setActionSuccess(`Added new member ${newMemName} to your rescue team roster!`);
+      await loadData();
+      setTimeout(() => setActionSuccess(null), 4000);
+    } catch (err) {
+      console.warn("Could not add team member:", err);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Top Banner */}
@@ -284,6 +318,159 @@ export function MemberResourceAllocationManager({
           <span className="text-[10px] text-slate-500 font-mono block pt-1">
             {allocations.filter((a) => a.status === "completed").length} of {allocations.length} completed
           </span>
+        </div>
+      </div>
+
+      {/* ── Rescue Team Members Details Tracker ── */}
+      <div className="adm-card space-y-4 border-l-[4px] border-l-[#115e59]">
+        <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-slate-200">
+          <div>
+            <span className="eyebrow flex items-center gap-1.5">
+              <Users size={14} className="text-[#115e59]" /> Rescue Team Roster &amp; Member Tracking
+            </span>
+            <h3 className="section-title mt-0.5">
+              Rescue Team Members Under Your Command ({members.length})
+            </h3>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowAddMember(!showAddMember)}
+            className="adm-btn adm-btn--primary text-xs"
+          >
+            <UserPlus size={13} /> {showAddMember ? "Cancel Registration" : "Register New Member"}
+          </button>
+        </div>
+
+        {/* Add New Member Form */}
+        {showAddMember && (
+          <form onSubmit={handleAddMember} className="p-4 bg-slate-50 border border-slate-200 space-y-3">
+            <h4 className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
+              <UserPlus size={14} className="text-[#115e59]" /> Register New Field Member to Roster
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="adm-field">
+                <span>Member Full Name</span>
+                <input
+                  type="text"
+                  required
+                  value={newMemName}
+                  onChange={(e) => setNewMemName(e.target.value)}
+                  placeholder="e.g. Officer Ramesh Patnaik"
+                />
+              </label>
+
+              <label className="adm-field">
+                <span>Callsign / Unit ID</span>
+                <input
+                  type="text"
+                  required
+                  value={newMemCallsign}
+                  onChange={(e) => setNewMemCallsign(e.target.value)}
+                  placeholder="e.g. SQUAD-LEAD-01"
+                />
+              </label>
+
+              <label className="adm-field">
+                <span>Phone / Contact Number</span>
+                <input
+                  type="text"
+                  required
+                  value={newMemPhone}
+                  onChange={(e) => setNewMemPhone(e.target.value)}
+                  placeholder="e.g. +91 94371 88201"
+                />
+              </label>
+
+              <label className="adm-field">
+                <span>Specialized Operational Role</span>
+                <input
+                  type="text"
+                  required
+                  value={newMemRole}
+                  onChange={(e) => setNewMemRole(e.target.value)}
+                  placeholder="e.g. Paramedic / Boat Operator / Squad Leader"
+                />
+              </label>
+            </div>
+
+            <button type="submit" className="adm-btn adm-btn--primary py-2 text-xs">
+              <CheckCircle2 size={13} /> Add Member to Team Roster
+            </button>
+          </form>
+        )}
+
+        {/* Members Detail Table / Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {members.map((m) => {
+            const memberOrders = allocations.filter((a) => a.memberId === m.id);
+            const totalAssignedKits = memberOrders.reduce(
+              (sum, a) => sum + (a.resources.find((r) => r.key === "foodRationKits")?.targetAmount || 0),
+              0
+            );
+            const totalGatheredKits = memberOrders.reduce(
+              (sum, a) => sum + (a.resources.find((r) => r.key === "foodRationKits")?.gatheredAmount || 0),
+              0
+            );
+
+            return (
+              <div
+                key={m.id}
+                className="p-3.5 border border-slate-200 bg-white space-y-2.5 shadow-xs hover:border-[#115e59]/40 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h4 className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
+                      <HardHat size={14} className="text-[#115e59]" />
+                      {m.name}
+                    </h4>
+                    <span className="text-[10px] text-slate-500 font-mono block mt-0.5">
+                      {m.callsign} · {m.id}
+                    </span>
+                  </div>
+
+                  <span
+                    className={`adm-status text-[10px] ${
+                      m.status === "active" || m.status === "field_dispatched"
+                        ? "adm-status--green"
+                        : "adm-status--amber"
+                    }`}
+                  >
+                    {m.status === "active" ? "Active Field" : m.status === "field_dispatched" ? "Dispatched" : "Standby"}
+                  </span>
+                </div>
+
+                <div className="p-2 bg-slate-50 border border-slate-200 text-xs space-y-1">
+                  <span className="text-[10px] text-slate-500 font-bold block">Role / Specialization:</span>
+                  <span className="font-medium text-slate-800 block truncate">{m.role}</span>
+                </div>
+
+                <div className="text-xs space-y-1 font-mono pt-1 border-t border-slate-100">
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                      <Phone size={10} className="text-emerald-600" /> Phone:
+                    </span>
+                    <a href={`tel:${m.phone}`} className="font-bold text-emerald-700 hover:underline text-[11px]">
+                      {m.phone}
+                    </a>
+                  </div>
+
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span className="text-[10px] text-slate-500">Orders Assigned:</span>
+                    <span className="font-bold text-slate-900">{memberOrders.length} Directives</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span className="text-[10px] text-slate-500">Rations Gathered:</span>
+                    <span className="font-bold text-slate-900">
+                      {totalGatheredKits} / {totalAssignedKits} kits
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

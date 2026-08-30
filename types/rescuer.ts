@@ -114,7 +114,9 @@ export interface VolunteerPledge {
   region: string;
   lat: number;
   lng: number;
-  status: "pending_team_head" | "approved_by_head" | "mobilized";
+  status: "pending_team_head" | "approved_by_head" | "mobilized" | "assigned_by_admin";
+  assignedTeamId?: string;
+  assignedTeamName?: string;
   submittedAt: string;
 }
 

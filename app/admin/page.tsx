@@ -11,6 +11,7 @@ import { AllocationOptimizer } from "@/components/admin/AllocationOptimizer";
 import { IncidentCard } from "@/components/incidents/IncidentCard";
 import { ResponseTeamRequests } from "@/components/admin/ResponseTeamRequests";
 import { CitizenResponsesFeed } from "@/components/admin/CitizenResponsesFeed";
+import { RegisteredTeamHeadsManager } from "@/components/admin/RegisteredTeamHeadsManager";
 import { Badge } from "@/components/ui/Badge";
 import {
   apiGetAllIncidents,
@@ -135,6 +136,11 @@ export default function AdminPage() {
       </div>
 
       <DisasterHeatmap incidents={incidents} />
+
+      <RegisteredTeamHeadsManager
+        incidents={incidents}
+        onRefreshData={fetchFreshData}
+      />
 
       <AllocationOptimizer
         incidents={incidents}

@@ -9,7 +9,6 @@ import {
   FileWarning,
   Package,
   UsersRound,
-  Truck,
   ShieldAlert,
   Printer,
   X,
@@ -23,7 +22,6 @@ const items = [
   { href: "/admin/volunteers", label: "Pledges", icon: UsersRound },
   { href: "/admin/resources", label: "Resources", icon: Package },
   { href: "/admin/posters", label: "Posters", icon: Printer },
-  { href: "/rescuer/demo-team-alpha", label: "Field", icon: Truck },
 ];
 
 export function Navigation({

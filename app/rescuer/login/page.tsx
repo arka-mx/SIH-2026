@@ -331,25 +331,37 @@ export default function RescuerLoginPage() {
                 </p>
               </div>
 
-              {/* jurisdiction radius */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label htmlFor="radius" className="text-xs font-bold text-[#475569]">
-                    Jurisdiction radius
-                  </label>
-                  <span className="text-xs font-bold text-[#115e59]">{regionRadius} km</span>
+              {/* jurisdiction radius — enabled ONLY for Rescue Team Head */}
+              {isTeamHead ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="radius" className="text-xs font-bold text-[#475569]">
+                      Jurisdiction radius
+                    </label>
+                    <span className="text-xs font-bold text-[#115e59]">{regionRadius} km</span>
+                  </div>
+                  <input
+                    id="radius"
+                    type="range"
+                    min="5"
+                    max="100"
+                    step="5"
+                    value={regionRadius}
+                    onChange={(e) => setRegionRadius(parseInt(e.target.value) || 25)}
+                    className="w-full accent-[#115e59] cursor-pointer"
+                  />
+                  <p className="text-[11px] text-[#64748b]">
+                    Set the geographical operational coverage radius for your regional command.
+                  </p>
                 </div>
-                <input
-                  id="radius"
-                  type="range"
-                  min="5"
-                  max="100"
-                  step="5"
-                  value={regionRadius}
-                  onChange={(e) => setRegionRadius(parseInt(e.target.value) || 25)}
-                  className="w-full accent-[#115e59] cursor-pointer"
-                />
-              </div>
+              ) : (
+                <div className="p-3 bg-slate-50 border border-slate-200 text-xs text-slate-500 space-y-0.5">
+                  <span className="font-bold text-slate-800 block">Jurisdiction Radius: Standard Sector Zone</span>
+                  <p className="text-[11px] text-slate-600">
+                    Jurisdiction radius is set and managed exclusively by your <b>Rescue Team Head</b>.
+                  </p>
+                </div>
+              )}
 
               {/* actions */}
               <div className="flex items-center gap-2 pt-2">

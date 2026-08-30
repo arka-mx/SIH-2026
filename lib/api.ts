@@ -41,6 +41,23 @@ const AUTH_TOKEN = "demo-authority-token";
  */
 export const DEMO_UNIT_ID = process.env.NEXT_PUBLIC_DEFAULT_RESCUER_ID || "demo-team-alpha";
 
+export function loadFromStorage<T>(key: string, defaultValue: T): T {
+  if (typeof window === "undefined") return defaultValue;
+  try {
+    const item = window.localStorage.getItem(key);
+    return item ? JSON.parse(item) : defaultValue;
+  } catch {
+    return defaultValue;
+  }
+}
+
+export function saveToStorage<T>(key: string, value: T): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
 export interface ReportItem {
   id: string;
   session_id: string;
@@ -787,7 +804,7 @@ export async function apiGetAllResources(): Promise<ResourceItem[]> {
   } catch {
     // fallback
   }
-  return FALLBACK_RESOURCES;
+  return loadFromStorage("fallback_resources", FALLBACK_RESOURCES);
 }
 
 export async function apiGetActiveAllocations(): Promise<AllocationLine[]> {
@@ -1263,6 +1280,47 @@ export async function apiUpdateRescuerUnitProfile(
   return next;
 }
 
+export async function apiSyncRescuerSuppliesWithAdmin(
+  unitId: string,
+  supplies: RescuerSupply
+): Promise<{ success: boolean; message: string; updatedProfile: RescuerUnitProfile }> {
+  const updatedProfile = await apiUpdateRescuerUnitProfile(unitId, { supplies });
+
+  // Sync with Admin master resources pool
+  const foodIdx = FALLBACK_RESOURCES.findIndex((r) => r.type === "supplies" || r.name.toLowerCase().includes("food"));
+  if (foodIdx !== -1) {
+    FALLBACK_RESOURCES[foodIdx] = {
+      ...FALLBACK_RESOURCES[foodIdx],
+      capacity_total: Math.max(FALLBACK_RESOURCES[foodIdx].capacity_total, supplies.foodRationCapacity),
+      capacity_used: Math.min(supplies.foodRationCapacity, supplies.foodRationCapacity - supplies.foodRationKits),
+    };
+  }
+
+  const waterIdx = FALLBACK_RESOURCES.findIndex((r) => r.name.toLowerCase().includes("water"));
+  if (waterIdx !== -1) {
+    FALLBACK_RESOURCES[waterIdx] = {
+      ...FALLBACK_RESOURCES[waterIdx],
+      capacity_total: Math.max(FALLBACK_RESOURCES[waterIdx].capacity_total, supplies.waterCapacityLiters),
+      capacity_used: Math.min(supplies.waterCapacityLiters, supplies.waterCapacityLiters - supplies.waterLiters),
+    };
+  }
+
+  const medIdx = FALLBACK_RESOURCES.findIndex((r) => r.type === "medical" || r.name.toLowerCase().includes("medical"));
+  if (medIdx !== -1) {
+    FALLBACK_RESOURCES[medIdx] = {
+      ...FALLBACK_RESOURCES[medIdx],
+      capacity_total: Math.max(FALLBACK_RESOURCES[medIdx].capacity_total, supplies.medicalKitsCapacity),
+      capacity_used: Math.min(supplies.medicalKitsCapacity, supplies.medicalKitsCapacity - supplies.medicalKits),
+    };
+  }
+
+  return {
+    success: true,
+    message: `Successfully updated resource quantities on Admin Master Pool for ${unitId}!`,
+    updatedProfile,
+  };
+}
+
 // ── Rescue Team Head Resource Estimations ──
 
 let inMemoryHeadEstimations: HeadResourceEstimation[] = [];
@@ -1338,7 +1396,64 @@ export async function apiGetIncidentsForOfficeRegion(
 import { VolunteerPledge } from "@/types/rescuer";
 export type { VolunteerPledge } from "@/types/rescuer";
 
-let inMemoryVolunteerPledges: VolunteerPledge[] = [];
+let inMemoryVolunteerPledges: VolunteerPledge[] = [
+  {
+    id: "VOL-801",
+    volunteerName: "Rajesh Mohanty",
+    contactPhone: "+91 94371 12345",
+    assetType: "High Clearance Truck & Boat",
+    capacity: "8 Persons + 500kg Load",
+    availability: "Immediate / 24 hrs",
+    locationName: "Brahmapur Town Center",
+    region: "Brahmapur District",
+    lat: 19.3200,
+    lng: 84.8000,
+    status: "pending_team_head",
+    submittedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+  },
+  {
+    id: "VOL-802",
+    volunteerName: "Priya Sharma",
+    contactPhone: "+91 98200 98765",
+    assetType: "Paramedic Unit & Emergency Trauma Kit",
+    capacity: "Medical Response Squad",
+    availability: "Next 12 Hours",
+    locationName: "Dharavi Relief Hub, Mumbai",
+    region: "Mumbai Coast",
+    lat: 19.0700,
+    lng: 72.8700,
+    status: "pending_team_head",
+    submittedAt: new Date(Date.now() - 3600000 * 5).toISOString(),
+  },
+  {
+    id: "VOL-803",
+    volunteerName: "Subhash Chandra",
+    contactPhone: "+91 97760 34567",
+    assetType: "Heavy Diesel Generator (25 kVA)",
+    capacity: "Powers 2 Emergency Relief Camps",
+    availability: "Immediate",
+    locationName: "Mahanadi Bank, Cuttack",
+    region: "Cuttack Sector",
+    lat: 20.4600,
+    lng: 85.8800,
+    status: "pending_team_head",
+    submittedAt: new Date(Date.now() - 3600000 * 8).toISOString(),
+  },
+  {
+    id: "VOL-804",
+    volunteerName: "Sanjay Das",
+    contactPhone: "+91 99380 56789",
+    assetType: "Deep Sea Diving Gear & Inflatable Raft",
+    capacity: "Certified Scuba Team (3 Divers)",
+    availability: "Full Operational Standby",
+    locationName: "Puri Golden Beach Base",
+    region: "Puri Coast",
+    lat: 19.8100,
+    lng: 85.8300,
+    status: "pending_team_head",
+    submittedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
+  },
+];
 
 export async function apiSubmitVolunteerRequest(
   pledge: Partial<VolunteerPledge>
@@ -1362,6 +1477,10 @@ export async function apiSubmitVolunteerRequest(
   return newPledge;
 }
 
+export async function apiGetAllVolunteerPledges(): Promise<VolunteerPledge[]> {
+  return inMemoryVolunteerPledges;
+}
+
 export async function apiGetVolunteerPledgesForHead(
   officeLat?: number,
   officeLng?: number,
@@ -1370,9 +1489,48 @@ export async function apiGetVolunteerPledgesForHead(
   if (!officeLat || !officeLng) return inMemoryVolunteerPledges;
 
   return inMemoryVolunteerPledges.filter((vol) => {
+    // Show assigned to this team or within radius
     const dist = calcDistanceKm(officeLat, officeLng, vol.lat, vol.lng);
-    return dist <= radiusKm;
+    return dist <= radiusKm || vol.status === "assigned_by_admin";
   });
+}
+
+export async function apiAssignVolunteerPledgeToTeam(
+  pledgeId: string,
+  teamId: string
+): Promise<{ pledge: VolunteerPledge; message: string }> {
+  const head = inMemoryTeamHeadContacts[teamId];
+  const targetName = head ? `${head.headName} (${head.headOffice})` : teamId;
+
+  inMemoryVolunteerPledges = inMemoryVolunteerPledges.map((v) => {
+    if (v.id === pledgeId) {
+      return {
+        ...v,
+        status: "assigned_by_admin",
+        assignedTeamId: teamId,
+        assignedTeamName: targetName,
+      };
+    }
+    return v;
+  });
+
+  const updated = inMemoryVolunteerPledges.find((v) => v.id === pledgeId);
+  if (!updated) throw new Error("Pledge not found");
+
+  // Send notification directive to Rescue Team Head
+  await apiSendDistrictHeadDirective({
+    adminName: "District Disaster Control Center (Admin Head)",
+    headUnitId: teamId,
+    title: `VOLUNTEER PLEDGE ASSIGNED: ${updated.volunteerName}`,
+    message: `Admin Head has assigned volunteer pledge ${updated.id} (${updated.volunteerName} - ${updated.assetType}, Phone: ${updated.contactPhone}) to your team base (${updated.locationName}). Please coordinate with the volunteer.`,
+    type: "notification",
+    priority: "normal",
+  });
+
+  return {
+    pledge: updated,
+    message: `Assigned volunteer pledge ${updated.volunteerName} to ${targetName}. Notification transmitted to Team Head.`,
+  };
 }
 
 export async function apiUpdateVolunteerPledgeStatus(
@@ -1389,7 +1547,7 @@ export async function apiUpdateVolunteerPledgeStatus(
 
 // ── District Head Connection (Admin Head Directives & Communications) ──
 
-let inMemoryDistrictDirectives: DistrictHeadDirective[] = [
+let inMemoryDistrictDirectives: DistrictHeadDirective[] = loadFromStorage("in_memory_district_directives", [
   {
     id: "DIR-ADM-001",
     adminName: "District Emergency Management Authority (District Head)",
@@ -1432,9 +1590,10 @@ let inMemoryDistrictDirectives: DistrictHeadDirective[] = [
     acknowledgedAt: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
     acknowledgmentNote: "Understood. Requisitioned 20 triage packs.",
   },
-];
+]);
 
 export async function apiGetDistrictHeadDirectives(headUnitId?: string): Promise<DistrictHeadDirective[]> {
+  inMemoryDistrictDirectives = loadFromStorage("in_memory_district_directives", inMemoryDistrictDirectives);
   if (!headUnitId) return inMemoryDistrictDirectives;
   return inMemoryDistrictDirectives.filter((d) => d.headUnitId === headUnitId);
 }
@@ -1443,6 +1602,7 @@ export async function apiAcknowledgeDistrictHeadDirective(
   directiveId: string,
   note?: string
 ): Promise<DistrictHeadDirective> {
+  inMemoryDistrictDirectives = loadFromStorage("in_memory_district_directives", inMemoryDistrictDirectives);
   inMemoryDistrictDirectives = inMemoryDistrictDirectives.map((d) =>
     d.id === directiveId
       ? {
@@ -1453,6 +1613,7 @@ export async function apiAcknowledgeDistrictHeadDirective(
         }
       : d
   );
+  saveToStorage("in_memory_district_directives", inMemoryDistrictDirectives);
   const updated = inMemoryDistrictDirectives.find((d) => d.id === directiveId);
   if (!updated) throw new Error("Directive not found");
   return updated;
@@ -1461,6 +1622,7 @@ export async function apiAcknowledgeDistrictHeadDirective(
 export async function apiSendDistrictHeadDirective(
   directive: Partial<DistrictHeadDirective>
 ): Promise<DistrictHeadDirective> {
+  inMemoryDistrictDirectives = loadFromStorage("in_memory_district_directives", inMemoryDistrictDirectives);
   const newDir: DistrictHeadDirective = {
     id: "DIR-ADM-" + Math.floor(100 + Math.random() * 900),
     adminName: directive.adminName || "District Disaster Authority (Admin Head)",
@@ -1474,12 +1636,13 @@ export async function apiSendDistrictHeadDirective(
     attachedResourceTarget: directive.attachedResourceTarget,
   };
   inMemoryDistrictDirectives.unshift(newDir);
+  saveToStorage("in_memory_district_directives", inMemoryDistrictDirectives);
   return newDir;
 }
 
 // ── Team Members & Head-To-Member Resource Allocations ──
 
-let inMemoryTeamMembers: TeamMember[] = [
+let inMemoryTeamMembers: TeamMember[] = loadFromStorage("in_memory_team_members", [
   {
     id: "mem-01",
     name: "Officer Ramesh Patnaik",
@@ -1512,16 +1675,31 @@ let inMemoryTeamMembers: TeamMember[] = [
     role: "Ration & Emergency Supply Officer",
     status: "active",
   },
-];
+]);
 
 export async function apiGetTeamMembers(teamId?: string): Promise<TeamMember[]> {
-  // Seed roster only belongs to the reference/demo unit. A live unit with its own
-  // route id starts with an empty roster until members are registered.
-  if (teamId && teamId !== DEMO_UNIT_ID) return [];
+  inMemoryTeamMembers = loadFromStorage("in_memory_team_members", inMemoryTeamMembers);
   return inMemoryTeamMembers;
 }
 
-let inMemoryMemberAllocations: MemberOrderAllocation[] = [
+export async function apiAddTeamMember(
+  member: Partial<TeamMember>
+): Promise<TeamMember> {
+  inMemoryTeamMembers = loadFromStorage("in_memory_team_members", inMemoryTeamMembers);
+  const newMem: TeamMember = {
+    id: "mem-" + Math.floor(100 + Math.random() * 900),
+    name: member.name || "Field Rescuer",
+    callsign: (member.callsign || "RESCUER-OFFICER").toUpperCase(),
+    phone: member.phone || "+91 94371 00000",
+    role: member.role || "Field Operations Specialist",
+    status: member.status || "active",
+  };
+  inMemoryTeamMembers.push(newMem);
+  saveToStorage("in_memory_team_members", inMemoryTeamMembers);
+  return newMem;
+}
+
+let inMemoryMemberAllocations: MemberOrderAllocation[] = loadFromStorage("in_memory_member_allocations", [
   {
     id: "ALLOC-MEM-001",
     teamId: "demo-team-alpha",
@@ -1598,9 +1776,10 @@ let inMemoryMemberAllocations: MemberOrderAllocation[] = [
       },
     ],
   },
-];
+]);
 
 export async function apiGetMemberAllocations(teamId?: string, memberId?: string): Promise<MemberOrderAllocation[]> {
+  inMemoryMemberAllocations = loadFromStorage("in_memory_member_allocations", inMemoryMemberAllocations);
   let list = inMemoryMemberAllocations;
   if (teamId) list = list.filter((a) => a.teamId === teamId);
   if (memberId) list = list.filter((a) => a.memberId === memberId);
@@ -1610,6 +1789,7 @@ export async function apiGetMemberAllocations(teamId?: string, memberId?: string
 export async function apiCreateMemberAllocation(
   newAlloc: Partial<MemberOrderAllocation>
 ): Promise<MemberOrderAllocation> {
+  inMemoryMemberAllocations = loadFromStorage("in_memory_member_allocations", inMemoryMemberAllocations);
   const item: MemberOrderAllocation = {
     id: "ALLOC-MEM-" + Math.floor(100 + Math.random() * 900),
     teamId: newAlloc.teamId || "demo-team-alpha",
@@ -1629,6 +1809,7 @@ export async function apiCreateMemberAllocation(
   };
 
   inMemoryMemberAllocations.unshift(item);
+  saveToStorage("in_memory_member_allocations", inMemoryMemberAllocations);
   return item;
 }
 
@@ -1676,6 +1857,7 @@ export async function apiUpdateMemberGatheredAmount(
   };
 
   inMemoryMemberAllocations[allocIndex] = updatedAlloc;
+  saveToStorage("in_memory_member_allocations", inMemoryMemberAllocations);
 
   // ── AUTOMATIC ADMIN MASTER RESOURCE POOL REDUCTION ──
   let matchedAdminRes: ResourceItem | undefined;
@@ -1701,6 +1883,7 @@ export async function apiUpdateMemberGatheredAmount(
         capacity_used: newUsed,
       };
       matchedAdminRes = FALLBACK_RESOURCES[resIdx];
+      saveToStorage("fallback_resources", FALLBACK_RESOURCES);
     }
   }
 
@@ -1711,12 +1894,17 @@ export async function apiUpdateMemberGatheredAmount(
   };
 }
 
-// ── REGIONAL TEAM HEAD LIVE CONTACT REGISTRY ──
+// ── REGIONAL TEAM HEAD LIVE CONTACT & DISPATCH REGISTRY ──
 export interface TeamHeadContactRecord {
   teamId: string;
   headName: string;
   headPhone: string;
   headOffice: string;
+  officeLat: number;
+  officeLng: number;
+  status: "available" | "en_route" | "at_scene" | "assigned";
+  assignedIncidentId?: string;
+  assignedIncidentTitle?: string;
   updatedAt: string;
 }
 
@@ -1725,7 +1913,50 @@ const inMemoryTeamHeadContacts: Record<string, TeamHeadContactRecord> = {
     teamId: "demo-team-alpha",
     headName: "Captain Rajesh Verma",
     headPhone: "+91 98765 11001",
-    headOffice: "Brahmapur Regional Disaster Command",
+    headOffice: "Brahmapur Regional Command",
+    officeLat: 19.315,
+    officeLng: 84.794,
+    status: "available",
+    updatedAt: new Date().toISOString(),
+  },
+  "ndrf-unit-mumbai": {
+    teamId: "ndrf-unit-mumbai",
+    headName: "Commander Sunil Naik",
+    headPhone: "+91 98765 22002",
+    headOffice: "Mumbai Coastal Rescue HQ",
+    officeLat: 19.068,
+    officeLng: 72.865,
+    status: "available",
+    updatedAt: new Date().toISOString(),
+  },
+  "odraf-cuttack": {
+    teamId: "odraf-cuttack",
+    headName: "Inspector Bikram Rout",
+    headPhone: "+91 98765 33003",
+    headOffice: "Cuttack Flood Relief Center",
+    officeLat: 20.4625,
+    officeLng: 85.8828,
+    status: "available",
+    updatedAt: new Date().toISOString(),
+  },
+  "ndrf-rourkela": {
+    teamId: "ndrf-rourkela",
+    headName: "Officer Meera Patnaik",
+    headPhone: "+91 98765 44004",
+    headOffice: "Rourkela Disaster Base",
+    officeLat: 22.2604,
+    officeLng: 84.8536,
+    status: "available",
+    updatedAt: new Date().toISOString(),
+  },
+  "sdrf-puri": {
+    teamId: "sdrf-puri",
+    headName: "Commander Manoj Tripathy",
+    headPhone: "+91 98765 55005",
+    headOffice: "Puri Beach Safety Command",
+    officeLat: 19.8135,
+    officeLng: 85.8312,
+    status: "available",
     updatedAt: new Date().toISOString(),
   },
 };
@@ -1738,6 +1969,9 @@ export async function apiRegisterTeamHeadContact(
     headName: "Captain Rajesh Verma",
     headPhone: "+91 98765 11001",
     headOffice: "Brahmapur Regional Disaster Command",
+    officeLat: 19.315,
+    officeLng: 84.794,
+    status: "available",
     updatedAt: new Date().toISOString(),
   };
 
@@ -1747,6 +1981,8 @@ export async function apiRegisterTeamHeadContact(
     headName: record.headName || existing.headName,
     headPhone: record.headPhone || existing.headPhone,
     headOffice: record.headOffice || existing.headOffice,
+    officeLat: record.officeLat ?? existing.officeLat ?? 19.315,
+    officeLng: record.officeLng ?? existing.officeLng ?? 84.794,
     updatedAt: new Date().toISOString(),
   };
 
@@ -1781,9 +2017,93 @@ export async function apiGetTeamHeadContact(teamId: string): Promise<TeamHeadCon
       headName: "Captain Rajesh Verma",
       headPhone: "+91 98765 11001",
       headOffice: "Brahmapur Regional Disaster Command",
+      officeLat: 19.315,
+      officeLng: 84.794,
+      status: "available",
       updatedAt: new Date().toISOString(),
     }
   );
+}
+
+export async function apiGetAllRegisteredTeamHeads(): Promise<TeamHeadContactRecord[]> {
+  if (typeof window !== "undefined") {
+    try {
+      const keys = Object.keys(localStorage);
+      for (const k of keys) {
+        if (k.startsWith("team_head_contact_")) {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && parsed.teamId) {
+              inMemoryTeamHeadContacts[parsed.teamId] = {
+                ...inMemoryTeamHeadContacts[parsed.teamId],
+                ...parsed,
+              };
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+  return Object.values(inMemoryTeamHeadContacts);
+}
+
+export async function apiAssignTaskToTeamHead(
+  teamId: string,
+  incidentId: string
+): Promise<{ record: TeamHeadContactRecord; distanceKm: number; message: string }> {
+  const head = inMemoryTeamHeadContacts[teamId];
+  const allIncidents = await apiGetAllIncidents();
+  const incident = allIncidents.find((i) => i.id === incidentId);
+
+  if (!head) throw new Error("Rescue Team Head not found");
+  if (!incident) throw new Error("Incident not found");
+
+  let incLat = incident.lat;
+  let incLng = incident.lng;
+  if ((incLat === undefined || incLng === undefined) && incident.location_wkt) {
+    const m = incident.location_wkt.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
+    if (m) {
+      incLng = parseFloat(m[1]);
+      incLat = parseFloat(m[2]);
+    }
+  }
+
+  const distanceKm =
+    typeof incLat === "number" && typeof incLng === "number"
+      ? Math.round(calcDistanceKm(head.officeLat, head.officeLng, incLat, incLng) * 10) / 10
+      : 0;
+
+  const updated: TeamHeadContactRecord = {
+    ...head,
+    status: "assigned",
+    assignedIncidentId: incident.id,
+    assignedIncidentTitle: `${incident.type.toUpperCase()} - ${incident.description || incident.location_wkt || "Field Zone"}`,
+    updatedAt: new Date().toISOString(),
+  };
+
+  inMemoryTeamHeadContacts[teamId] = updated;
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(`team_head_contact_${teamId}`, JSON.stringify(updated));
+    } catch {}
+  }
+
+  // Auto-send formal District Directive to Rescue Team Head
+  await apiSendDistrictHeadDirective({
+    adminName: "District Disaster Control Center (Admin Head)",
+    headUnitId: teamId,
+    title: `ASSIGNMENT: ${incident.type.toUpperCase()} (${distanceKm} km from ${head.headOffice})`,
+    message: `You are hereby assigned to lead rescue operations for ${incident.id} (${incident.description || "Emergency Zone"}). Distance from your regional command base: ${distanceKm} km. Please mobilize your team and estimate required rations immediately.`,
+    type: "order",
+    priority: "urgent",
+  });
+
+  return {
+    record: updated,
+    distanceKm,
+    message: `Successfully assigned task "${incident.id}" to ${head.headName} (${head.headOffice}). Proximity: ${distanceKm} km.`,
+  };
 }
 
 

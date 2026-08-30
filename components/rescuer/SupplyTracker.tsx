@@ -13,16 +13,18 @@ import {
   Plus,
   Minus,
 } from "lucide-react";
-import { RescuerSupply } from "@/types/rescuer";
+import { apiSyncRescuerSuppliesWithAdmin } from "@/lib/api";
 
 interface SupplyTrackerProps {
+  rescuerId?: string;
   initialSupplies: RescuerSupply;
   onUpdateSupplies?: (updated: RescuerSupply) => void;
 }
 
-export function SupplyTracker({ initialSupplies, onUpdateSupplies }: SupplyTrackerProps) {
+export function SupplyTracker({ rescuerId = "demo-team-alpha", initialSupplies, onUpdateSupplies }: SupplyTrackerProps) {
   const [supplies, setSupplies] = useState<RescuerSupply>(initialSupplies);
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   function handleChange(key: keyof RescuerSupply, delta: number, maxCapKey?: keyof RescuerSupply) {
     const currentVal = supplies[key] as number;
@@ -31,8 +33,23 @@ export function SupplyTracker({ initialSupplies, onUpdateSupplies }: SupplyTrack
     const updated = { ...supplies, [key]: newVal };
     setSupplies(updated);
     if (onUpdateSupplies) onUpdateSupplies(updated);
-    setUpdateMsg(`Updated ${key.replace(/([A-Z])/g, " $1").toLowerCase()}`);
-    setTimeout(() => setUpdateMsg(null), 2500);
+    setUpdateMsg(`Modified ${key.replace(/([A-Z])/g, " $1").toLowerCase()}. Click "Update Admin Master Pool" to save.`);
+  }
+
+  async function handleSyncWithAdmin() {
+    setSyncing(true);
+    try {
+      const result = await apiSyncRescuerSuppliesWithAdmin(rescuerId, supplies);
+      setUpdateMsg(result.message);
+      if (onUpdateSupplies) onUpdateSupplies(supplies);
+      setTimeout(() => setUpdateMsg(null), 4000);
+    } catch (err) {
+      console.warn("Could not sync supplies with admin:", err);
+      setUpdateMsg("Failed to update resource quantities on Admin side.");
+      setTimeout(() => setUpdateMsg(null), 4000);
+    } finally {
+      setSyncing(false);
+    }
   }
 
   const cards = [
@@ -91,16 +108,28 @@ export function SupplyTracker({ initialSupplies, onUpdateSupplies }: SupplyTrack
 
   return (
     <div className="adm-card space-y-6">
-      <div className="flex items-start justify-between flex-wrap gap-2 pb-4 border-b border-slate-200">
+      <div className="flex items-start justify-between flex-wrap gap-3 pb-4 border-b border-slate-200">
         <div>
           <span className="eyebrow">Field supply &amp; logistics</span>
           <h2 className="section-title mt-1">Team &amp; shelter capacity inventory</h2>
         </div>
-        {updateMsg && (
-          <span className="adm-status adm-status--green">
-            <CheckCircle2 size={12} /> {updateMsg}
-          </span>
-        )}
+
+        <div className="flex items-center gap-3 flex-wrap">
+          {updateMsg && (
+            <span className="adm-status adm-status--green flex items-center gap-1 text-xs">
+              <CheckCircle2 size={13} /> {updateMsg}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleSyncWithAdmin}
+            disabled={syncing}
+            className="adm-btn adm-btn--primary text-xs py-2 px-4 flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <CheckCircle2 size={14} />
+            {syncing ? "Updating Admin Pool..." : "Update Admin Master Pool"}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

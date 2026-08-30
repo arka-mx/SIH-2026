@@ -257,6 +257,7 @@ export default function RescuerDetailPage({
               />
 
               <SupplyTracker
+                rescuerId={rescuerId}
                 initialSupplies={profile.supplies}
                 onUpdateSupplies={handleUpdateSupplies}
               />
@@ -299,6 +300,7 @@ export default function RescuerDetailPage({
 
           {activeTab === "supplies" && (
             <SupplyTracker
+              rescuerId={rescuerId}
               initialSupplies={profile.supplies}
               onUpdateSupplies={handleUpdateSupplies}
             />
@@ -330,6 +332,7 @@ export default function RescuerDetailPage({
                 </p>
               </div>
               <SupplyTracker
+                rescuerId={rescuerId}
                 initialSupplies={profile.supplies}
                 onUpdateSupplies={handleUpdateSupplies}
               />
