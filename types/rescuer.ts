@@ -117,6 +117,7 @@ export interface VolunteerPledge {
   status: "pending_team_head" | "approved_by_head" | "mobilized" | "assigned_by_admin";
   assignedTeamId?: string;
   assignedTeamName?: string;
+  deviceId?: string;
   submittedAt: string;
 }
 
