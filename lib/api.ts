@@ -2072,7 +2072,10 @@ export async function apiAssignTaskToTeamHead(
   }
 
   const distanceKm =
-    typeof incLat === "number" && typeof incLng === "number"
+    typeof incLat === "number" &&
+    typeof incLng === "number" &&
+    typeof head.officeLat === "number" &&
+    typeof head.officeLng === "number"
       ? Math.round(calcDistanceKm(head.officeLat, head.officeLng, incLat, incLng) * 10) / 10
       : 0;
 

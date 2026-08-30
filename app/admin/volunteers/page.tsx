@@ -137,7 +137,10 @@ export default function VolunteersPage() {
             const headsWithDist = teamHeads
               .map((head) => {
                 const dist =
-                  pledge.lat && pledge.lng && head.officeLat && head.officeLng
+                  typeof pledge.lat === "number" &&
+                  typeof pledge.lng === "number" &&
+                  typeof head.officeLat === "number" &&
+                  typeof head.officeLng === "number"
                     ? getDistanceKm(pledge.lat, pledge.lng, head.officeLat, head.officeLng)
                     : 999;
                 return { ...head, dist };

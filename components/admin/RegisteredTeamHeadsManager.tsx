@@ -144,7 +144,9 @@ export function RegisteredTeamHeadsManager({
               .map((inc) => {
                 const coords = getIncidentCoords(inc);
                 const dist =
-                  coords && head.officeLat && head.officeLng
+                  coords &&
+                  typeof head.officeLat === "number" &&
+                  typeof head.officeLng === "number"
                     ? getDistanceKm(head.officeLat, head.officeLng, coords.lat, coords.lng)
                     : 999;
                 return { ...inc, dist };
@@ -215,7 +217,9 @@ export function RegisteredTeamHeadsManager({
                       <MapPin size={11} className="text-blue-600" /> Base GPS Location
                     </span>
                     <span className="font-mono text-[11px] text-slate-800 font-semibold">
-                      {head.officeLat ? `${head.officeLat.toFixed(3)}, ${head.officeLng.toFixed(3)}` : "GPS set"}
+                      {typeof head.officeLat === "number" && typeof head.officeLng === "number"
+                        ? `${head.officeLat.toFixed(3)}, ${head.officeLng.toFixed(3)}`
+                        : "GPS set"}
                     </span>
                   </div>
                 </div>
