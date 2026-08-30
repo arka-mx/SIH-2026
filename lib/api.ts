@@ -1263,5 +1263,80 @@ export async function apiUpdateMemberGatheredAmount(
   };
 }
 
+// ── REGIONAL TEAM HEAD LIVE CONTACT REGISTRY ──
+export interface TeamHeadContactRecord {
+  teamId: string;
+  headName: string;
+  headPhone: string;
+  headOffice: string;
+  updatedAt: string;
+}
+
+const inMemoryTeamHeadContacts: Record<string, TeamHeadContactRecord> = {
+  "demo-team-alpha": {
+    teamId: "demo-team-alpha",
+    headName: "Captain Rajesh Verma",
+    headPhone: "+91 98765 11001",
+    headOffice: "Brahmapur Regional Disaster Command",
+    updatedAt: new Date().toISOString(),
+  },
+};
+
+export async function apiRegisterTeamHeadContact(
+  record: Partial<TeamHeadContactRecord> & { teamId: string }
+): Promise<TeamHeadContactRecord> {
+  const existing = inMemoryTeamHeadContacts[record.teamId] || {
+    teamId: record.teamId,
+    headName: "Captain Rajesh Verma",
+    headPhone: "+91 98765 11001",
+    headOffice: "Brahmapur Regional Disaster Command",
+    updatedAt: new Date().toISOString(),
+  };
+
+  const updated: TeamHeadContactRecord = {
+    ...existing,
+    ...record,
+    headName: record.headName || existing.headName,
+    headPhone: record.headPhone || existing.headPhone,
+    headOffice: record.headOffice || existing.headOffice,
+    updatedAt: new Date().toISOString(),
+  };
+
+  inMemoryTeamHeadContacts[record.teamId] = updated;
+
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(`team_head_contact_${record.teamId}`, JSON.stringify(updated));
+    } catch {}
+  }
+
+  return updated;
+}
+
+export async function apiGetTeamHeadContact(teamId: string): Promise<TeamHeadContactRecord> {
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem(`team_head_contact_${teamId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.headPhone) {
+          inMemoryTeamHeadContacts[teamId] = parsed;
+          return parsed;
+        }
+      }
+    } catch {}
+  }
+
+  return (
+    inMemoryTeamHeadContacts[teamId] || {
+      teamId,
+      headName: "Captain Rajesh Verma",
+      headPhone: "+91 98765 11001",
+      headOffice: "Brahmapur Regional Disaster Command",
+      updatedAt: new Date().toISOString(),
+    }
+  );
+}
+
 
 

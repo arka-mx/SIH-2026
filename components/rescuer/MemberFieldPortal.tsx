@@ -23,9 +23,11 @@ import {
 } from "lucide-react";
 import {
   apiGetMemberAllocations,
+  apiGetTeamHeadContact,
   apiUpdateMemberGatheredAmount,
   MemberOrderAllocation,
   ResourceRequirementItem,
+  TeamHeadContactRecord,
 } from "@/lib/api";
 
 interface MemberFieldPortalProps {
@@ -51,6 +53,30 @@ export function MemberFieldPortal({
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
+
+  const [headContact, setHeadContact] = useState<TeamHeadContactRecord>({
+    teamId,
+    headName,
+    headPhone,
+    headOffice,
+    updatedAt: "",
+  });
+
+  useEffect(() => {
+    async function loadHeadInfo() {
+      try {
+        const contact = await apiGetTeamHeadContact(teamId);
+        if (contact && contact.headPhone) {
+          setHeadContact(contact);
+        }
+      } catch (err) {
+        console.warn("Could not load team head contact:", err);
+      }
+    }
+    loadHeadInfo();
+    const interval = setInterval(loadHeadInfo, 3000);
+    return () => clearInterval(interval);
+  }, [teamId]);
 
   async function loadAllocations() {
     try {
@@ -143,29 +169,21 @@ export function MemberFieldPortal({
             <span className="flex items-center gap-1.5 font-bold text-slate-700">
               <Crown size={14} className="text-amber-600" /> Regional Team Head
             </span>
-            <strong className="text-slate-900 font-bold text-xs">{headName}</strong>
+            <strong className="text-slate-900 font-bold text-xs">{headContact.headName || headName}</strong>
           </div>
 
           <div className="adm-kv">
             <span className="flex items-center gap-1.5 font-bold text-slate-700">
               <Building size={14} className="text-[#115e59]" /> Regional Base Command
             </span>
-            <strong className="text-slate-900 text-xs truncate">{headOffice}</strong>
+            <strong className="text-slate-900 text-xs truncate">{headContact.headOffice || headOffice}</strong>
           </div>
 
           <div className="adm-kv">
             <span className="flex items-center gap-1.5 font-bold text-slate-700">
               <Phone size={14} className="text-emerald-600" /> Head Point of Contact
             </span>
-            <strong className="text-emerald-700 font-mono text-xs">{headPhone}</strong>
-          </div>
-        </div>
-
-        {/* Hierarchy & Strict Admin Isolation Note */}
-        <div className="p-3 bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-start gap-2.5">
-          <ShieldCheck size={16} className="text-[#115e59] shrink-0 mt-0.5" />
-          <div>
-            <strong className="text-slate-800">Direct Command Protocol:</strong> Your sole authorized point of contact is your <b>Rescue Team Head ({headName})</b>. You have no direct contact or interface with the District Admin Head. All ration requirements and field missions originate from your Team Head.
+            <strong className="text-emerald-700 font-mono text-xs">{headContact.headPhone || headPhone}</strong>
           </div>
         </div>
       </div>

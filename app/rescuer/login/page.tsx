@@ -14,7 +14,7 @@ import {
 import { useRouter } from "next/navigation";
 import { signInWithPopup } from "firebase/auth";
 import { BackButton } from "@/components/public/BackButton";
-import { apiReverseGeocode } from "@/lib/api";
+import { apiRegisterTeamHeadContact, apiReverseGeocode } from "@/lib/api";
 import { auth, googleProvider } from "@/lib/firebase";
 
 export default function RescuerLoginPage() {
@@ -29,6 +29,7 @@ export default function RescuerLoginPage() {
 
   // Profile fields
   const [isTeamHead, setIsTeamHead] = useState<boolean>(true);
+  const [phone, setPhone] = useState<string>("+91 98765 11001");
   const rescuerId = process.env.NEXT_PUBLIC_DEFAULT_RESCUER_ID || "demo-team-alpha";
 
   // Office Location fields
@@ -119,6 +120,15 @@ export default function RescuerLoginPage() {
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || t("error", "Invalid rescuer credentials"));
+
+      if (isTeamHead) {
+        await apiRegisterTeamHeadContact({
+          teamId: rescuerId.trim() || "demo-team-alpha",
+          headName: googleName || "Captain Rajesh Verma",
+          headPhone: phone || "+91 98765 11001",
+          headOffice: officeName || "Brahmapur Regional Disaster Command",
+        });
+      }
 
       router.push(data.redirect || `/rescuer/${encodeURIComponent(rescuerId.trim() || "demo-team-alpha")}`);
       router.refresh();
@@ -240,6 +250,25 @@ export default function RescuerLoginPage() {
                     );
                   })}
                 </div>
+              </div>
+
+              {/* phone contact */}
+              <div className="space-y-2">
+                <label htmlFor="head-phone" className="text-xs font-bold text-[#475569]">
+                  Emergency Phone / Contact Number
+                </label>
+                <input
+                  id="head-phone"
+                  type="text"
+                  required
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="e.g. +91 98765 11001"
+                  className="w-full p-2.5 bg-white border border-[#cbd5e1] text-xs font-semibold text-[#0f1b2d] focus:border-[#c2410c] focus:outline-hidden"
+                />
+                <p className="text-[11px] text-[#64748b]">
+                  This contact number will automatically show in the Head Point of Contact card on all field members&apos; dashboards.
+                </p>
               </div>
 
               {/* office / base location */}

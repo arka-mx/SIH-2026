@@ -10,7 +10,7 @@ import { DistrictHeadConnection } from "@/components/rescuer/DistrictHeadConnect
 import { ReadOnlyDisasterMap } from "@/components/rescuer/ReadOnlyDisasterMap";
 import { MemberResourceAllocationManager } from "@/components/rescuer/MemberResourceAllocationManager";
 import { MemberFieldPortal } from "@/components/rescuer/MemberFieldPortal";
-import { apiGetAllIncidents, apiGetIncidentsForOfficeRegion, ReportItem } from "@/lib/api";
+import { apiGetAllIncidents, apiGetIncidentsForOfficeRegion, apiRegisterTeamHeadContact, ReportItem } from "@/lib/api";
 import { fetchRescuerSession, RescuerUserSession } from "@/lib/rescuerAuth";
 import { RescuerSupply, RescuerUnitProfile } from "@/types/rescuer";
 import { MapPin, Radio, Eye, PackagePlus } from "lucide-react";
@@ -152,6 +152,13 @@ export default function RescuerDetailPage({
         setIsTeamHead(s.isTeamHead);
         if (!s.isTeamHead) {
           setActiveTab("member-portal");
+        } else {
+          apiRegisterTeamHeadContact({
+            teamId: rescuerId,
+            headName: s.name || profile.leaderName,
+            headPhone: profile.phone || "+91 98765 11001",
+            headOffice: s.officeName || "Brahmapur Regional Disaster Command",
+          });
         }
       }
       loadData();
@@ -159,7 +166,7 @@ export default function RescuerDetailPage({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [rescuerId]);
 
   async function loadData() {
     try {
