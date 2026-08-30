@@ -21,11 +21,13 @@ const AUTH_TOKEN = "demo-authority-token";
 export interface ReportItem {
   id: string;
   session_id: string;
+  device_id?: string;
   type: string;
   description?: string;
   photo_url?: string;
-  status: "unverified" | "verified" | "in_progress" | "resolved" | "denied_auto_routed";
+  status: "unverified" | "verified" | "in_progress" | "resolved" | "denied_auto_routed" | "cancelled";
   created_at: string;
+  updated_at?: string;
   lat?: number;
   lng?: number;
   location_wkt?: string;
@@ -34,8 +36,12 @@ export interface ReportItem {
   assigned_rescuer?: RescuerUnitProfile;
   rescuer_status?: "pending_admin" | "assigned" | "admin_denied_auto_routed" | "arrived";
   address?: string;
+  region?: string;
   denied_by_admin?: boolean;
   assignment_source?: "admin_dispatch" | "nearest_fallback_admin_denied";
+  reports?: any[];
+  report_count?: number;
+  action?: "CREATED" | "UPDATED" | "IDEMPOTENT_DUPLICATE";
 }
 
 export interface ResourceItem {
@@ -216,7 +222,20 @@ export async function apiToggleRadicalRegionRule(
 
 // ── Location & Reverse Geocoding ──
 
+export interface GeocodeLocation {
+  displayName: string;
+  region: string;
+  city?: string;
+  district?: string;
+  state?: string;
+}
+
 export async function apiReverseGeocode(lat: number, lng: number): Promise<string> {
+  const result = await apiReverseGeocodeDetailed(lat, lng);
+  return result.displayName;
+}
+
+export async function apiReverseGeocodeDetailed(lat: number, lng: number): Promise<GeocodeLocation> {
   try {
     const response = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
@@ -228,14 +247,28 @@ export async function apiReverseGeocode(lat: number, lng: number): Promise<strin
     );
     if (response.ok) {
       const data = await response.json();
-      if (data && data.display_name) {
-        return data.display_name;
+      if (data && data.address) {
+        const city = data.address.city || data.address.town || data.address.village || data.address.suburb || "Coastal Sector";
+        const district = data.address.state_district || data.address.county || data.address.district || city;
+        const state = data.address.state || "State Jurisdiction";
+        const region = `${city}, ${district}`;
+
+        return {
+          displayName: data.display_name || `${region}, ${state}`,
+          region,
+          city,
+          district,
+          state,
+        };
       }
     }
   } catch (err) {
     console.warn("Reverse geocode fetch error:", err);
   }
-  return `Sector (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+  return {
+    displayName: `Sector Region (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+    region: `Region (${lat.toFixed(2)}, ${lng.toFixed(2)})`,
+  };
 }
 
 export function calcDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -254,26 +287,36 @@ export function calcDistanceKm(lat1: number, lon1: number, lat2: number, lon2: n
 
 // ── Original Citizen Endpoints ──
 
-export async function apiSubmitReport(formData: FormData): Promise<{ report: ReportItem; verifiedReports?: ReportItem[] }> {
+export async function apiSubmitReport(formData: FormData): Promise<{ report: ReportItem; verifiedReports?: ReportItem[]; action?: string }> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/reports`, {
+    const deviceId = (formData.get("device_id") as string) || (formData.get("session_id") as string) || "dev-anonymous-client";
+    const idempotencyKey = (formData.get("idempotency_key") as string) || "";
+
+    const res = await fetch(`${API_BASE_URL}/api/rescue/request`, {
       method: "POST",
+      headers: {
+        "x-device-id": deviceId,
+        ...(idempotencyKey ? { "x-idempotency-key": idempotencyKey } : {}),
+      },
       body: formData,
     });
     if (!res.ok) {
       const errorText = await res.text();
-      throw new Error(errorText || "Failed to submit emergency report");
+      throw new Error(errorText || "Failed to submit emergency rescue request");
     }
     const data = await res.json();
     if (data.report) {
+      inMemoryIncidents = inMemoryIncidents.filter((i) => i.id !== data.report.id);
       inMemoryIncidents.unshift(data.report);
     }
     return data;
   } catch (err) {
     console.warn("Backend API not reachable for submitReport, creating local report:", err);
+    const deviceId = (formData.get("device_id") as string) || (formData.get("session_id") as string) || "dev-local-session";
     const newRep: ReportItem = {
       id: "REP-" + Math.random().toString(36).substring(2, 8).toUpperCase(),
-      session_id: (formData.get("session_id") as string) || "local-session",
+      session_id: deviceId,
+      device_id: deviceId,
       type: (formData.get("type") as string) || "flood",
       description: (formData.get("description") as string) || "",
       status: "unverified",
@@ -283,9 +326,11 @@ export async function apiSubmitReport(formData: FormData): Promise<{ report: Rep
       location_wkt: `POINT(${(formData.get("lng") as string) || "72.8777"} ${(formData.get("lat") as string) || "19.076"})`,
       address: (formData.get("description") as string)?.split("]")[0]?.replace("[", "") || "Current Location",
       rescuer_status: "pending_admin",
+      report_count: 1,
+      action: "CREATED",
     };
     inMemoryIncidents.unshift(newRep);
-    return { report: newRep };
+    return { report: newRep, action: "CREATED" };
   }
 }
 
@@ -703,6 +748,60 @@ export async function apiGetIncidentsForOfficeRegion(
     const dist = calcDistanceKm(officeLat, officeLng, incLat, incLng);
     return dist <= radiusKm;
   });
+}
+
+// ── Volunteer Requests Routed to Rescue Team Head ──
+
+import { VolunteerPledge } from "@/types/rescuer";
+export type { VolunteerPledge } from "@/types/rescuer";
+
+let inMemoryVolunteerPledges: VolunteerPledge[] = [];
+
+export async function apiSubmitVolunteerRequest(
+  pledge: Partial<VolunteerPledge>
+): Promise<VolunteerPledge> {
+  const newPledge: VolunteerPledge = {
+    id: "VOL-" + Math.floor(100 + Math.random() * 900),
+    volunteerName: pledge.volunteerName || "Community Volunteer",
+    contactPhone: pledge.contactPhone || "+91 98765 43210",
+    assetType: pledge.assetType || "Inflatable Boat",
+    capacity: pledge.capacity || "4 Persons",
+    availability: pledge.availability || "Immediate",
+    locationName: pledge.locationName || "Local Sector Base",
+    region: pledge.region || "Regional Sector",
+    lat: pledge.lat || 19.076,
+    lng: pledge.lng || 72.8777,
+    status: "pending_team_head",
+    submittedAt: new Date().toISOString(),
+  };
+
+  inMemoryVolunteerPledges.unshift(newPledge);
+  return newPledge;
+}
+
+export async function apiGetVolunteerPledgesForHead(
+  officeLat?: number,
+  officeLng?: number,
+  radiusKm: number = 30
+): Promise<VolunteerPledge[]> {
+  if (!officeLat || !officeLng) return inMemoryVolunteerPledges;
+
+  return inMemoryVolunteerPledges.filter((vol) => {
+    const dist = calcDistanceKm(officeLat, officeLng, vol.lat, vol.lng);
+    return dist <= radiusKm;
+  });
+}
+
+export async function apiUpdateVolunteerPledgeStatus(
+  pledgeId: string,
+  status: "approved_by_head" | "mobilized"
+): Promise<VolunteerPledge> {
+  inMemoryVolunteerPledges = inMemoryVolunteerPledges.map((v) =>
+    v.id === pledgeId ? { ...v, status } : v
+  );
+  const updated = inMemoryVolunteerPledges.find((v) => v.id === pledgeId);
+  if (!updated) throw new Error("Volunteer pledge not found");
+  return updated;
 }
 
 

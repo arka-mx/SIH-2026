@@ -48,6 +48,22 @@ export default function VolunteersPage() {
         </div>
       </div>
 
+      <div className="p-4 bg-purple-900 text-white rounded-2xl mb-6 shadow-sm border border-purple-800 flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-purple-500/20 text-purple-300 rounded-xl border border-purple-500/30">
+            <Sparkles size={20} className="text-purple-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white">
+              👑 Directly Managed by Regional Rescue Team Heads
+            </h3>
+            <p className="text-xs text-purple-200 mt-0.5">
+              To eliminate administrative delays, incoming volunteer offers & equipment pledges route directly to the <strong>Rescue Team Head</strong> in each regional office command.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {loading ? (
         <div className="p-8 text-center text-sm text-stone-500 bg-white rounded-xl border border-stone-200">
           Loading community resource pledges...

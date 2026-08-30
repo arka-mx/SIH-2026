@@ -27,6 +27,7 @@ import { Radio, RefreshCw, Sparkles, ShieldAlert, Zap, ArrowRight, Truck, Users 
 export default function AdminPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [selectedIncident, setSelectedIncident] = useState<ReportItem | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<string>("all");
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [rescuers, setRescuers] = useState<RescuerUnitProfile[]>([]);
   const [permissions, setPermissions] = useState<PredeterminedPermissionSettings | null>(null);
@@ -65,9 +66,25 @@ export default function AdminPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const verified = incidents.filter((i) => i.status === "verified");
-  const inProgress = incidents.filter((i) => i.status === "in_progress");
-  const unverified = incidents.filter((i) => i.status === "unverified");
+  // Unique region list for regionwise filtering
+  const availableRegions = Array.from(
+    new Set(
+      incidents
+        .map((i) => i.region || (i.address ? i.address.split(",")[0] : "General Region"))
+        .filter(Boolean)
+    )
+  );
+
+  const regionFilteredIncidents = selectedRegion === "all"
+    ? incidents
+    : incidents.filter((i) => {
+        const reg = i.region || i.address || "";
+        return reg.toLowerCase().includes(selectedRegion.toLowerCase());
+      });
+
+  const verified = regionFilteredIncidents.filter((i) => i.status === "verified");
+  const inProgress = regionFilteredIncidents.filter((i) => i.status === "in_progress");
+  const unverified = regionFilteredIncidents.filter((i) => i.status === "unverified");
 
   function handleSelectIncident(inc: ReportItem) {
     setSelectedIncident(inc);
@@ -98,10 +115,50 @@ export default function AdminPage() {
 
         <Link
           href="/admin/permissions"
-          className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl shadow-2xs flex items-center gap-1.5 transition-all"
+          className="bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-3 py-2 rounded-xl border border-white/20 flex items-center gap-1 backdrop-blur-md"
         >
-          Configure Permissions & Radical Zones <ArrowRight size={14} />
+          Manage Rules <ArrowRight size={14} />
         </Link>
+      </div>
+
+      {/* Regionwise Emergency Routing Filter Bar */}
+      <div className="bg-white border border-stone-200 p-3 rounded-2xl mb-4 flex items-center justify-between flex-wrap gap-3 shadow-2xs">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-extrabold text-stone-800 flex items-center gap-1.5">
+            📍 Regionwise Dispatch Jurisdiction:
+          </span>
+          <span className="text-xs font-bold text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full border border-stone-200">
+            {selectedRegion === "all" ? "Showing All Regions" : `Region: ${selectedRegion}`}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setSelectedRegion("all")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              selectedRegion === "all"
+                ? "bg-slate-900 text-white shadow-2xs"
+                : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+            }`}
+          >
+            🌐 All Regions ({incidents.length})
+          </button>
+          {availableRegions.map((reg) => (
+            <button
+              key={reg}
+              type="button"
+              onClick={() => setSelectedRegion(reg)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                selectedRegion === reg
+                  ? "bg-emerald-600 text-white shadow-2xs"
+                  : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
+              }`}
+            >
+              📍 {reg}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex items-center justify-between mb-4">

@@ -35,6 +35,7 @@ export function IncidentCard({
   const [shortlist, setShortlist] = useState<ResourceItem[] | null>(null);
   const [loadingShortlist, setLoadingShortlist] = useState(false);
   const [showShortlist, setShowShortlist] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -117,6 +118,20 @@ export function IncidentCard({
     return "amber";
   }
 
+  const reportsList = incident.reports && incident.reports.length > 0 ? incident.reports : [
+    {
+      id: incident.id,
+      incident_id: incident.id,
+      device_id: incident.device_id || incident.session_id,
+      type: incident.type,
+      message: incident.description,
+      latitude: incident.lat || 19.076,
+      longitude: incident.lng || 72.8777,
+      created_at: incident.created_at,
+    }
+  ];
+  const reportCount = incident.report_count || reportsList.length;
+
   return (
     <article
       className={`incident-card !p-4 transition-all ${
@@ -134,6 +149,12 @@ export function IncidentCard({
               {incident.status === "verified" ? "✓ Verified" : incident.status}
             </Badge>
 
+            {reportCount > 1 && (
+              <span className="bg-indigo-100 text-indigo-900 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-indigo-300 flex items-center gap-1">
+                📋 {reportCount} Submissions (Same Active Incident)
+              </span>
+            )}
+
             {incident.denied_by_admin && (
               <span className="bg-purple-100 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-purple-300 flex items-center gap-1">
                 <Zap size={11} className="text-purple-600" /> Auto-Routed (Admin Denied)
@@ -145,15 +166,56 @@ export function IncidentCard({
             {incident.location_wkt || "GPS Coordinates"}
           </p>
         </div>
-        <span className="text-[10px] font-mono font-bold text-stone-400">
-          #{incident.id.slice(0, 8)}
-        </span>
+        <div className="text-right">
+          <span className="text-[10px] font-mono font-bold text-stone-400 block">
+            #{incident.id.slice(0, 8)}
+          </span>
+          {incident.device_id && (
+            <span className="text-[9px] font-mono text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded block mt-0.5" title={`Device ID: ${incident.device_id}`}>
+              Device: {incident.device_id.slice(0, 8)}...
+            </span>
+          )}
+        </div>
       </div>
 
       {incident.description && (
         <p className="mt-2 text-xs text-stone-600 line-clamp-2 bg-stone-50 p-2 rounded">
           {incident.description}
         </p>
+      )}
+
+      {/* Reports Event Timeline Toggle */}
+      {reportsList.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-stone-100">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setShowTimeline(!showTimeline); }}
+            className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1 cursor-pointer"
+          >
+            {showTimeline ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            {showTimeline ? "Hide Incident Event Timeline" : `Show Incident Timeline (${reportsList.length} Events)`}
+          </button>
+
+          {showTimeline && (
+            <div className="mt-2 p-2.5 bg-slate-900 text-white rounded-xl text-xs space-y-2 font-mono">
+              <span className="text-[10px] uppercase tracking-wider font-sans font-bold text-stone-400 block pb-1 border-b border-stone-800">
+                Rescue Report Timeline (Single Active Incident #{(incident.incident_id || incident.id).slice(0, 8)})
+              </span>
+              {reportsList.map((rpt, idx) => (
+                <div key={rpt.id || idx} className="p-2 bg-white/10 rounded-lg space-y-1">
+                  <div className="flex items-center justify-between text-[10px] text-emerald-400 font-bold">
+                    <span>Event #{idx + 1} — {rpt.type.toUpperCase()}</span>
+                    <span>{new Date(rpt.created_at).toLocaleTimeString()}</span>
+                  </div>
+                  <p className="text-stone-200 text-xs font-sans">{rpt.message || rpt.description || "Emergency report update"}</p>
+                  {rpt.ip_address && (
+                    <span className="text-[9px] text-stone-400 block font-mono">IP: {rpt.ip_address} · Device: {(rpt.device_id || incident.device_id || "device").slice(0, 12)}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {incident.photo_url && (

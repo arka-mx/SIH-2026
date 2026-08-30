@@ -1,53 +1,27 @@
 "use client";
 
-const SESSION_STORAGE_KEY = "momentum_citizen_session_id";
+import { getOrCreateDeviceId } from "@/lib/device";
 
 /**
- * Retrieves the deterministic IP-based session ID from `/api/session`.
- * This session ID is strictly unique and locked to the client's IP address.
- * Even if localStorage is cleared or regenerated, it will always resolve to the exact same IP session ID.
+ * Retrieves the device-specific unique Device ID.
+ * Locked strictly to the client device (NOT network or IP specific).
+ * User cannot regenerate it.
  */
 export async function fetchIpBasedSessionId(): Promise<string> {
-  if (typeof window === "undefined") {
-    return "server-session";
-  }
-
-  try {
-    const res = await fetch("/api/session", { cache: "no-store" });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.sessionId) {
-        localStorage.setItem(SESSION_STORAGE_KEY, data.sessionId);
-        return data.sessionId;
-      }
-    }
-  } catch (err) {
-    console.warn("Could not fetch IP session ID from backend, using cached session:", err);
-  }
-
-  return getOrCreateSessionId();
+  return getOrCreateDeviceId();
 }
 
 /**
- * Fallback to cached IP session ID or static server identifier.
- * Ensures no random IDs can be generated.
+ * Returns the immutable device-specific unique Device ID.
  */
 export function getOrCreateSessionId(): string {
-  if (typeof window === "undefined") {
-    return "server-session";
-  }
-
-  const cached = localStorage.getItem(SESSION_STORAGE_KEY);
-  if (cached) {
-    return cached;
-  }
-
-  return "ip-session-locked-client";
+  return getOrCreateDeviceId();
 }
 
 /**
- * Enforces immutable IP session ID (always returns the IP-locked session ID).
+ * Always returns the exact same immutable device-specific unique Device ID.
+ * Regeneration is disabled.
  */
 export function createNewSessionId(): string {
-  return getOrCreateSessionId();
+  return getOrCreateDeviceId();
 }
