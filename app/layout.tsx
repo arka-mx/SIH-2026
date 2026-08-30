@@ -3,6 +3,7 @@ import "./globals.css";
 import { GlobalLanguageSwitcher } from "@/components/ui/GlobalLanguageSwitcher";
 import { AutoTranslateProvider } from "@/components/i18n/AutoTranslateProvider";
 import { EmergencyAlertsWidget } from "@/components/alerts/EmergencyAlertsWidget";
+import { TranslationProvider } from "@/components/ui/TranslationProvider";
 
 export const metadata: Metadata = {
   title: "Sanket | Disaster Response Command Center",
@@ -13,6 +14,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
+        <TranslationProvider />
         <GlobalLanguageSwitcher />
         <AutoTranslateProvider>{children}</AutoTranslateProvider>
         <EmergencyAlertsWidget />

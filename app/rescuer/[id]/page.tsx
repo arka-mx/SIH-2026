@@ -1,8 +1,6 @@
 "use client";
 
-import { use, useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { use, useEffect, useRef, useState } from "react";
 import { RescueHeadResourceEstimator } from "@/components/rescuer/RescueHeadResourceEstimator";
 import { TeamHeadVolunteerPool } from "@/components/rescuer/TeamHeadVolunteerPool";
 import { RescuerShell } from "@/components/rescuer/RescuerShell";
@@ -22,7 +20,7 @@ import {
 } from "@/lib/api";
 import { fetchRescuerSession, RescuerUserSession } from "@/lib/rescuerAuth";
 import { RescuerSupply, RescuerUnitProfile } from "@/types/rescuer";
-import { RotateCw, MapPin, LogIn, Radio, Eye, PackagePlus } from "lucide-react";
+import { MapPin, Radio, Eye, PackagePlus } from "lucide-react";
 
 const DEFAULT_REGION_RADIUS_KM = 35;
 
@@ -116,11 +114,6 @@ export default function RescuerDetailPage({
     };
   }, [rescuerId, router, loadData]);
 
-  function handleRoleToggle(head: boolean) {
-    setIsTeamHead(head);
-    setActiveTab(head ? "overview" : "member-portal");
-  }
-
   function handleStatusChange(newStatus: "available" | "en_route" | "at_scene") {
     setProfile((prev) => (prev ? { ...prev, status: newStatus } : prev));
   }
@@ -166,7 +159,6 @@ export default function RescuerDetailPage({
       isTeamHead={isTeamHead}
       activeTab={activeTab}
       onTabChange={setActiveTab}
-      onToggleRole={handleRoleToggle}
     >
       {/* ── Top Header Strip ── */}
       <div className="adm-card">
@@ -198,18 +190,6 @@ export default function RescuerDetailPage({
                 </>
               )}
             </p>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button type="button" onClick={() => handleRoleToggle(!isTeamHead)} className="adm-btn">
-              {isTeamHead ? "Member view" : "Head view"}
-            </button>
-            <Link href="/rescuer/login" className="adm-btn">
-              <LogIn size={14} /> Office login
-            </Link>
-            <button onClick={loadData} className="adm-btn" disabled={loading}>
-              <RotateCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
-            </button>
           </div>
         </div>
       </div>

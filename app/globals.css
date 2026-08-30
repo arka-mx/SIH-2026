@@ -1388,3 +1388,34 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .citizen-shell .cz-steps span { flex:1 1 45%; }
 }
 
+/* ---- Google Translate Navbar & Banner Suppression ---- */
+.goog-te-banner-frame,
+.goog-te-banner-frame.skiptranslate,
+iframe.skiptranslate,
+#goog-gt-tt,
+.goog-te-balloon-frame,
+.VIpgJd-y6524b-y0fdfe-ju5thd,
+.goog-te-gadget-icon,
+.goog-te-spinner-pos {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  height: 0 !important;
+  width: 0 !important;
+}
+
+body {
+  top: 0px !important;
+  position: static !important;
+}
+
+font {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+#google_translate_element {
+  display: none !important;
+}
+
