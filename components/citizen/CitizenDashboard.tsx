@@ -23,11 +23,12 @@ import Link from "next/link";
 import { 
   apiSubmitReport, 
   apiReverseGeocode, 
+  apiReverseGeocodeDetailed,
   apiGetIncidentById, 
   apiGetActiveReportForSession,
   ReportItem 
 } from "@/lib/api";
-import { fetchIpBasedSessionId, createNewSessionId } from "@/lib/session";
+import { getOrCreateDeviceId } from "@/lib/device";
 import { CitizenLiveTrackingMap } from "@/components/citizen/CitizenLiveTrackingMap";
 import { WeatherWidget } from "@/components/ui/WeatherWidget";
 import { useLanguage } from "@/lib/language";
@@ -254,6 +255,7 @@ export function CitizenDashboard() {
   const [lat, setLat] = useState<string>("19.0760");
   const [lng, setLng] = useState<string>("72.8777");
   const [locationName, setLocationName] = useState<string>("Mumbai Coastal Sector");
+  const [regionName, setRegionName] = useState<string>("Mumbai, Maharashtra");
   const [disasterType, setDisasterType] = useState<string>("flood");
   const [helpNeeded, setHelpNeeded] = useState<string>("Rescue team");
   const [injured, setInjured] = useState<string>("0");
@@ -271,18 +273,12 @@ export function CitizenDashboard() {
   const [activeExistingReport, setActiveExistingReport] = useState<ReportItem | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Prefill the emergency location when arriving from a scanned shelter poster.
-  useEffect(() => {
-    const loc = new URLSearchParams(window.location.search).get("loc");
-    if (loc) setLocationName(loc);
-  }, []);
-
-  // Initialize IP-based session ID & check for active report
+  // Initialize Immutable Device-Specific Unique ID & check for active report
   useEffect(() => {
     async function initSession() {
-      const ipSession = await fetchIpBasedSessionId();
-      setSessionId(ipSession);
-      const active = await apiGetActiveReportForSession(ipSession);
+      const devId = getOrCreateDeviceId();
+      setSessionId(devId);
+      const active = await apiGetActiveReportForSession(devId);
       if (active) {
         setActiveExistingReport(active);
         setSubmittedReport(active);
@@ -290,13 +286,6 @@ export function CitizenDashboard() {
     }
     initSession();
   }, []);
-
-  function handleNewSession() {
-    const newId = createNewSessionId();
-    setSessionId(newId);
-    setSubmittedReport(null);
-    setActiveExistingReport(null);
-  }
 
   // Live status polling for citizen emergency report
   useEffect(() => {
@@ -306,7 +295,7 @@ export function CitizenDashboard() {
       const fresh = await apiGetIncidentById(submittedReport.id);
       if (fresh) {
         setSubmittedReport(fresh);
-        if (fresh.status !== "resolved") {
+        if (fresh.status !== "resolved" && fresh.status !== "cancelled") {
           setActiveExistingReport(fresh);
         }
       }
@@ -330,10 +319,12 @@ export function CitizenDashboard() {
         setLng(longitude.toFixed(6));
         
         try {
-          const address = await apiReverseGeocode(latitude, longitude);
-          setLocationName(address);
+          const detail = await apiReverseGeocodeDetailed(latitude, longitude);
+          setLocationName(detail.displayName);
+          setRegionName(detail.region);
         } catch {
           setLocationName(`Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`);
+          setRegionName(`Sector (${latitude.toFixed(2)}, ${longitude.toFixed(2)})`);
         }
         setGpsLoading(false);
       },
@@ -344,10 +335,12 @@ export function CitizenDashboard() {
         setLat(fallbackLat.toFixed(6));
         setLng(fallbackLng.toFixed(6));
         try {
-          const address = await apiReverseGeocode(fallbackLat, fallbackLng);
-          setLocationName(address);
+          const detail = await apiReverseGeocodeDetailed(fallbackLat, fallbackLng);
+          setLocationName(detail.displayName);
+          setRegionName(detail.region);
         } catch {
           setLocationName("Mumbai Coastal Sector (Auto-detected)");
+          setRegionName("Mumbai, Maharashtra");
         }
         setGpsLoading(false);
       },
@@ -359,6 +352,7 @@ export function CitizenDashboard() {
     setLocationName(name);
     setLat(pLat);
     setLng(pLng);
+    setRegionName(name.split("(")[0].trim());
   }
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -374,29 +368,25 @@ export function CitizenDashboard() {
     setLoading(true);
     setError(null);
 
-    // Enforce 1 active emergency per IP Session ID
-    const activeCheck = await apiGetActiveReportForSession(sessionId);
-    if (activeCheck && activeCheck.status !== "resolved") {
-      setActiveExistingReport(activeCheck);
-      setSubmittedReport(activeCheck);
-      setError("An active emergency request is already registered under your IP session. You can track your assigned rescuers below.");
-      setLoading(false);
-      setIsModalOpen(false);
-      return;
-    }
-
     try {
+      const devId = getOrCreateDeviceId();
+      const idempotencyKey = "idemp-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
+
       const formData = new FormData();
-      formData.append("session_id", sessionId);
+      formData.append("device_id", devId);
+      formData.append("session_id", devId);
+      formData.append("idempotency_key", idempotencyKey);
       formData.append("type", disasterType);
       formData.append("lat", lat);
       formData.append("lng", lng);
+      formData.append("region", regionName);
+      formData.append("address", locationName);
 
       if (selectedPhoto) {
         formData.append("photo", selectedPhoto);
       }
 
-      const fullDesc = `[${locationName}] Emergency Request (${disasterType.toUpperCase()}) - Injured: ${injured}, Trapped: ${casualties}, Safe: ${isSafe ? 'Yes' : 'No'}`;
+      const fullDesc = `[${locationName} | Region: ${regionName}] Emergency Request (${disasterType.toUpperCase()}) - Injured: ${injured}, Trapped: ${casualties}, Safe: ${isSafe ? 'Yes' : 'No'}`;
       formData.append("description", fullDesc);
 
       const response = await apiSubmitReport(formData);
@@ -425,20 +415,13 @@ export function CitizenDashboard() {
 
           <LanguageSelect variant="compact" />
 
-          <span className="login-note flex items-center gap-1.5 border border-emerald-300 bg-emerald-50/80 px-3 py-1 rounded-xl">
-            <ShieldCheck size={14} className="text-emerald-600" />
-            <span className="text-xs font-bold text-emerald-950">IP Session:</span>
-            <code className="text-xs bg-white text-emerald-900 px-2 py-0.5 rounded font-mono font-extrabold border border-emerald-200">{sessionId}</code>
+          <span className="login-note flex items-center gap-1.5 border border-purple-300 bg-purple-50/80 px-3 py-1 rounded-xl shadow-2xs">
+            <ShieldCheck size={14} className="text-purple-600" />
+            <span className="text-xs font-bold text-purple-950">Device ID:</span>
+            <code className="text-xs bg-white text-purple-900 px-2 py-0.5 rounded font-mono font-extrabold border border-purple-200" title={`Device ID: ${sessionId}`}>
+              {sessionId.slice(0, 18)}...
+            </code>
           </span>
-
-          <button 
-            type="button" 
-            onClick={handleNewSession}
-            className="text-xs text-stone-600 hover:text-emerald-700 bg-white border border-stone-200 hover:border-emerald-500 px-2.5 py-1 rounded-md flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
-            title="Simulate a new independent citizen reporter"
-          >
-            <RotateCcw size={12} /> {t.simNewId}
-          </button>
         </div>
       </div>
 
@@ -618,9 +601,16 @@ export function CitizenDashboard() {
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-[11px] text-stone-500 font-mono">
-                      <span>Lat: <strong>{lat}</strong></span>
-                      <span>Lng: <strong>{lng}</strong></span>
+                    <div className="p-2 bg-emerald-100/70 border border-emerald-300 rounded-xl space-y-1 text-xs text-emerald-950 font-sans">
+                      <div className="flex items-center gap-1 font-bold">
+                        <MapPin size={13} className="text-emerald-700" />
+                        <span>Region Jurisdiction: <strong>{regionName}</strong></span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] font-mono text-emerald-900 pt-0.5 border-t border-emerald-200/70">
+                        <span>Latitude: <strong>{lat}</strong></span>
+                        <span>Longitude: <strong>{lng}</strong></span>
+                        <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-md font-sans font-extrabold shadow-2xs">Regionwise Routed</span>
+                      </div>
                     </div>
                   </div>
 

@@ -3,6 +3,7 @@
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { RescueHeadResourceEstimator } from "@/components/rescuer/RescueHeadResourceEstimator";
+import { TeamHeadVolunteerPool } from "@/components/rescuer/TeamHeadVolunteerPool";
 import { RescuerShell } from "@/components/rescuer/RescuerShell";
 import { SupplyTracker } from "@/components/rescuer/SupplyTracker";
 import { DisasterAssignmentCard } from "@/components/rescuer/DisasterAssignmentCard";
@@ -267,6 +268,14 @@ export default function RescuerDetailPage({
         assignedIncident={assignedIncident}
         rescuerId={rescuerId}
         leaderName={profile.leaderName}
+      />
+
+      {/* Rescue Team Head Direct Volunteer Request Stream */}
+      <TeamHeadVolunteerPool
+        officeLat={session?.officeLat || profile.lat}
+        officeLng={session?.officeLng || profile.lng}
+        officeName={session?.officeName || "Regional Base Command"}
+        isTeamHead={session ? session.isTeamHead : true}
       />
 
       {/* Map View of Assigned / Nearest Disaster */}

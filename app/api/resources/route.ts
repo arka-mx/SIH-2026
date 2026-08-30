@@ -23,6 +23,7 @@ export async function GET() {
 
     return NextResponse.json(formatted);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to fetch resources" }, { status: 500 });
+    console.warn("MongoDB offline, returning empty resources list:", err);
+    return NextResponse.json([]);
   }
 }

@@ -103,3 +103,18 @@ export interface HeadResourceEstimation {
   status: "draft" | "confirmed_broadcast";
 }
 
+export interface VolunteerPledge {
+  id: string;
+  volunteerName: string;
+  contactPhone: string;
+  assetType: string;
+  capacity: string;
+  availability: string;
+  locationName: string;
+  region: string;
+  lat: number;
+  lng: number;
+  status: "pending_team_head" | "approved_by_head" | "mobilized";
+  submittedAt: string;
+}
+

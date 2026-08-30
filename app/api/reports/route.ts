@@ -1,40 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
+import { processRescueSubmission } from "@/lib/rescueStore";
 import { connectToDatabase } from "@/lib/mongodb";
 import { ReportModel } from "@/lib/models/Report";
 import { writeFile } from "fs/promises";
 import path from "path";
 
-// Haversine distance in meters
-function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000; // meters
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
 export async function POST(req: NextRequest) {
   try {
-    await connectToDatabase();
-
     const contentType = req.headers.get("content-type") || "";
-    let session_id = "";
-    let type = "";
+    let device_id = req.headers.get("x-device-id") || "";
+    let idempotency_key = req.headers.get("x-idempotency-key") || "";
+    let type = "flood";
     let description = "";
     let lat = 0;
     let lng = 0;
     let photo_url: string | undefined = undefined;
 
+    const forwardedFor = req.headers.get("x-forwarded-for");
+    const ip_address = forwardedFor ? forwardedFor.split(",")[0].trim() : req.headers.get("x-real-ip") || "127.0.0.1";
+    const user_agent = req.headers.get("user-agent") || "";
+
     if (contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
-      session_id = (formData.get("session_id") as string) || "";
-      type = (formData.get("type") as string) || "";
+      if (!device_id) device_id = (formData.get("device_id") as string) || (formData.get("session_id") as string) || "";
+      if (!idempotency_key) idempotency_key = (formData.get("idempotency_key") as string) || "";
+      type = (formData.get("type") as string) || "flood";
       description = (formData.get("description") as string) || "";
       lat = parseFloat((formData.get("lat") as string) || "0");
       lng = parseFloat((formData.get("lng") as string) || "0");
@@ -50,92 +40,51 @@ export async function POST(req: NextRequest) {
       }
     } else {
       const body = await req.json();
-      session_id = body.session_id;
-      type = body.type;
-      description = body.description;
-      lat = body.lat;
-      lng = body.lng;
+      if (!device_id) device_id = body.device_id || body.session_id || "";
+      if (!idempotency_key) idempotency_key = body.idempotency_key || "";
+      type = body.type || "flood";
+      description = body.description || "";
+      lat = body.lat || 0;
+      lng = body.lng || 0;
       photo_url = body.photo_url;
     }
 
-    if (!session_id || !type || isNaN(lat) || isNaN(lng)) {
+    if (!device_id || !type || isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) {
       return NextResponse.json(
-        { error: "Missing required fields: session_id, type, lat, lng" },
+        { error: "Missing required fields: device_id, type, lat, lng" },
         { status: 400 }
       );
     }
 
-    const newReport = await ReportModel.create({
-      session_id,
+    const result = await processRescueSubmission({
+      device_id,
       type,
-      description,
-      photo_url,
-      status: "unverified",
-      location: {
-        type: "Point",
-        coordinates: [lng, lat],
-      },
-    } as Record<string, unknown>);
-
-    // Check clustering: find unverified reports within ~200m and 15 mins
-    const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
-    const candidateReports = await ReportModel.find({
-      type,
-      status: "unverified",
-      created_at: { $gte: fifteenMinsAgo },
-    } as Record<string, unknown>);
-
-    const nearbyCluster = candidateReports.filter((r) => {
-      const [rLng, rLat] = r.location.coordinates;
-      const dist = haversineMeters(lat, lng, rLat, rLng);
-      return dist <= 200;
+      message: description,
+      latitude: lat,
+      longitude: lng,
+      ip_address,
+      user_agent,
+      idempotency_key,
     });
 
-    const distinctSessions = new Set(nearbyCluster.map((r) => r.session_id));
-
-    let verifiedReports: any[] | undefined = undefined;
-
-    if (distinctSessions.size >= 3) {
-      const clusterIds = nearbyCluster.map((r) => r._id);
-      await ReportModel.updateMany(
-        { _id: { $in: clusterIds } },
-        { $set: { status: "verified" } }
-      );
-
-      verifiedReports = await ReportModel.find({ _id: { $in: clusterIds } });
-    }
-
     const formattedReport = {
-      id: newReport._id.toString(),
-      session_id: newReport.session_id,
-      type: newReport.type,
-      description: newReport.description,
-      photo_url: newReport.photo_url,
-      status: newReport.status,
-      created_at: newReport.created_at,
+      id: result.incident.id,
+      session_id: device_id,
+      device_id,
+      type: result.incident.type,
+      description: result.incident.description,
+      photo_url,
+      status: result.incident.status,
+      created_at: result.incident.created_at,
       lat,
       lng,
       location_wkt: `POINT(${lng} ${lat})`,
+      action: result.action,
+      reports: result.incident.reports,
+      report_count: result.incident.report_count,
     };
 
-    return NextResponse.json(
-      {
-        report: formattedReport,
-        verifiedReports: verifiedReports?.map((r) => ({
-          id: r._id.toString(),
-          session_id: r.session_id,
-          type: r.type,
-          description: r.description,
-          photo_url: r.photo_url,
-          status: r.status,
-          created_at: r.created_at,
-          lat: r.location.coordinates[1],
-          lng: r.location.coordinates[0],
-          location_wkt: `POINT(${r.location.coordinates[0]} ${r.location.coordinates[1]})`,
-        })),
-      },
-      { status: 201 }
-    );
+    return NextResponse.json({ report: formattedReport, action: result.action }, { status: result.action === "CREATED" ? 201 : 200 });
   } catch (err: any) {
     console.error("POST /api/reports error:", err);
     return NextResponse.json({ error: err.message || "Failed to submit report" }, { status: 500 });
@@ -144,29 +93,30 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    await connectToDatabase();
     const { searchParams } = new URL(req.url);
-    const sessionId = searchParams.get("session_id");
+    const deviceId = req.headers.get("x-device-id") || searchParams.get("device_id") || searchParams.get("session_id");
 
-    const query = sessionId ? { session_id: sessionId } : {};
-    const reports = await ReportModel.find(query).sort({ created_at: -1 });
+    const allIncidents = (await import("@/lib/rescueStore")).getAllRescueIncidents();
+    const filtered = deviceId ? allIncidents.filter((i) => i.device_id === deviceId) : allIncidents;
 
-    const formatted = reports.map((r) => ({
-      id: r._id.toString(),
-      session_id: r.session_id,
-      type: r.type,
-      description: r.description,
-      photo_url: r.photo_url,
-      status: r.status,
-      created_at: r.created_at,
-      lat: r.location.coordinates[1],
-      lng: r.location.coordinates[0],
-      location_wkt: `POINT(${r.location.coordinates[0]} ${r.location.coordinates[1]})`,
+    const formatted = filtered.map((inc) => ({
+      id: inc.id,
+      session_id: inc.device_id,
+      device_id: inc.device_id,
+      type: inc.type,
+      description: inc.description,
+      status: inc.status,
+      created_at: inc.created_at,
+      lat: inc.latitude,
+      lng: inc.longitude,
+      location_wkt: inc.location_wkt,
+      reports: inc.reports,
+      report_count: inc.report_count,
     }));
 
     return NextResponse.json(formatted);
   } catch (err: any) {
-    console.warn("MongoDB offline, returning empty server reports:", err);
+    console.warn("Error fetching reports:", err);
     return NextResponse.json([]);
   }
 }
