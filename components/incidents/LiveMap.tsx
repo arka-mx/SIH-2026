@@ -260,14 +260,14 @@ export function LiveMap({
         }
 
         const el = document.createElement("div");
-        el.className = "openfreemap-incident-marker";
+        el.className = `lm-marker openfreemap-incident-marker${isSelected ? " lm-marker--active" : ""}`;
         el.style.cssText = "position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;";
         el.innerHTML = `
-          ${isVerified || isInProgress ? '<div style="position: absolute; width: 34px; height: 34px; border-radius: 9999px; background: rgba(16, 185, 129, 0.4); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>' : ""}
+          ${isVerified || isInProgress ? '<div style="position: absolute; width: 34px; height: 34px; border-radius: 9999px; background: rgba(16, 185, 129, 0.4); animation: lm-ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>' : ""}
           <div style="width: 28px; height: 28px; border-radius: 9999px; background: ${toneBg}; border: 2px solid white; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); ${isSelected ? "transform: scale(1.25); outline: 3px solid #10b981;" : ""}">
             ${inc.type ? inc.type[0].toUpperCase() : "!"}
           </div>
-          <div style="position: absolute; top: 30px; background: rgba(15, 23, 42, 0.95); color: white; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+          <div class="lm-marker-label" style="top: 32px; background: rgba(15, 23, 42, 0.95); color: white;">
             ${inc.type} (${statusLabel})
           </div>
         `;
@@ -355,14 +355,14 @@ export function LiveMap({
             : "🚒";
 
         const el = document.createElement("div");
-        el.className = "openfreemap-resource-marker";
+        el.className = "lm-marker openfreemap-resource-marker";
         el.style.cssText = "position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;";
         el.innerHTML = `
-          <div style="position: absolute; width: 32px; height: 32px; border-radius: 8px; background: rgba(79, 70, 229, 0.3); animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+          <div style="position: absolute; width: 32px; height: 32px; border-radius: 8px; background: rgba(79, 70, 229, 0.3); animation: lm-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
           <div style="width: 28px; height: 28px; border-radius: 8px; background: ${isAvailable ? "#4f46e5" : "#0284c7"}; border: 2px solid white; color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 13px;">
             ${resourceEmoji}
           </div>
-          <div style="position: absolute; top: -16px; background: rgba(30, 27, 75, 0.95); color: white; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; white-space: nowrap;">
+          <div class="lm-marker-label" style="bottom: 34px; background: rgba(30, 27, 75, 0.95); color: white;">
             ${res.name.split(" ")[0]} (${availableCap}/${res.capacity_total})
           </div>
         `;
@@ -398,14 +398,14 @@ export function LiveMap({
           : `${unit.supplies.lifeJackets} jackets · ${unit.supplies.medicalKits} med kits`;
 
         const el = document.createElement("div");
-        el.className = "openfreemap-rescuer-marker";
+        el.className = "lm-marker openfreemap-rescuer-marker";
         el.style.cssText = "position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;";
         el.innerHTML = `
-          <div style="position: absolute; width: 38px; height: 38px; border-radius: 9999px; background: ${ring}55; animation: ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+          <div style="position: absolute; width: 38px; height: 38px; border-radius: 9999px; background: ${ring}55; animation: lm-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
           <div style="width: 30px; height: 30px; border-radius: 9999px; background: white; border: 3px solid ${ring}; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); font-size: 14px;">
             ${emoji}
           </div>
-          <div style="position: absolute; top: -16px; background: ${ring}; color: white; font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: bold; white-space: nowrap;">
+          <div class="lm-marker-label" style="bottom: 36px; background: ${ring}; color: white;">
             ${unit.callsign}
           </div>
         `;
@@ -651,90 +651,108 @@ export function LiveMap({
         zIndex: 1,
       }}
     >
-      {/* OpenFreeMap Style Switcher Bar */}
+      <style>{`
+        @keyframes lm-ping {
+          0% { transform: scale(0.85); opacity: 0.9; }
+          75%, 100% { transform: scale(2); opacity: 0; }
+        }
+        .lm-marker { z-index: 1; }
+        .lm-marker:hover, .lm-marker--active { z-index: 400 !important; }
+        .lm-marker-label {
+          position: absolute;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 10px;
+          font-weight: 700;
+          padding: 2px 6px;
+          border-radius: 4px;
+          white-space: nowrap;
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.12s ease;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+        }
+        .lm-marker:hover .lm-marker-label,
+        .lm-marker--active .lm-marker-label { opacity: 1; }
+        .maplibregl-popup-content { border-radius: 10px; padding: 10px 12px; box-shadow: 0 8px 24px rgba(15,23,42,0.18); }
+      `}</style>
+
+      {/* Unified map control bar */}
       <div
         style={{
           position: "absolute",
           top: "10px",
           right: "10px",
           zIndex: 10,
-          background: "rgba(15, 23, 42, 0.85)",
-          backdropFilter: "blur(8px)",
-          padding: "4px 8px",
-          borderRadius: "8px",
           display: "flex",
-          alignItems: "center",
+          flexDirection: "column",
+          alignItems: "flex-end",
           gap: "6px",
-          border: "1px solid rgba(255, 255, 255, 0.15)",
+          maxWidth: "calc(100% - 20px)",
         }}
       >
-        <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: "bold", textTransform: "uppercase", paddingRight: "4px" }}>
-          🗺️ OpenFreeMap:
-        </span>
-        {OPENFREEMAP_STYLES.map((st) => (
-          <button
-            key={st.id}
-            onClick={() => handleStyleSwitch(st.id)}
+        <div
+          style={{
+            background: "rgba(15, 23, 42, 0.85)",
+            backdropFilter: "blur(8px)",
+            padding: "5px 8px",
+            borderRadius: "8px",
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            justifyContent: "flex-end",
+            gap: "6px",
+            border: "1px solid rgba(255, 255, 255, 0.15)",
+          }}
+        >
+          <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: "bold", textTransform: "uppercase" }}>
+            Layers
+          </span>
+          {([
+            { key: "incidents", label: "Incidents" },
+            { key: "teams", label: "Teams / Givers" },
+            { key: "zones", label: "Danger Zones" },
+          ] as const).map((l) => (
+            <button
+              key={l.key}
+              onClick={() => setLayers((prev) => ({ ...prev, [l.key]: !prev[l.key] }))}
+              style={{
+                padding: "3px 8px",
+                borderRadius: "5px",
+                fontSize: "11px",
+                fontWeight: "bold",
+                border: "none",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                background: layers[l.key] ? "#3b82f6" : "rgba(255, 255, 255, 0.1)",
+                color: layers[l.key] ? "#ffffff" : "#cbd5e1",
+              }}
+            >
+              {layers[l.key] ? "● " : "○ "}{l.label}
+            </button>
+          ))}
+          <select
+            value={activeStyle}
+            onChange={(e) => handleStyleSwitch(e.target.value)}
+            aria-label="Map style"
             style={{
-              padding: "3px 8px",
+              padding: "3px 6px",
               borderRadius: "5px",
               fontSize: "11px",
               fontWeight: "bold",
-              border: "none",
+              border: "1px solid rgba(255,255,255,0.15)",
               cursor: "pointer",
-              transition: "all 0.2s",
-              background: activeStyle === st.id ? "#3b82f6" : "rgba(255, 255, 255, 0.1)",
-              color: activeStyle === st.id ? "#ffffff" : "#cbd5e1",
+              background: "rgba(255,255,255,0.1)",
+              color: "#e2e8f0",
             }}
           >
-            {st.name}
-          </button>
-        ))}
-      </div>
-
-      {/* Layer Filter Bar */}
-      <div
-        style={{
-          position: "absolute",
-          top: "10px",
-          left: "50px",
-          zIndex: 10,
-          background: "rgba(15, 23, 42, 0.85)",
-          backdropFilter: "blur(8px)",
-          padding: "4px 8px",
-          borderRadius: "8px",
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-          border: "1px solid rgba(255, 255, 255, 0.15)",
-        }}
-      >
-        <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: "bold", textTransform: "uppercase", paddingRight: "4px" }}>
-          Layers:
-        </span>
-        {([
-          { key: "incidents", label: "Incidents" },
-          { key: "teams", label: "Teams / Givers" },
-          { key: "zones", label: "Danger Zones" },
-        ] as const).map((l) => (
-          <button
-            key={l.key}
-            onClick={() => setLayers((prev) => ({ ...prev, [l.key]: !prev[l.key] }))}
-            style={{
-              padding: "3px 8px",
-              borderRadius: "5px",
-              fontSize: "11px",
-              fontWeight: "bold",
-              border: "none",
-              cursor: "pointer",
-              transition: "all 0.2s",
-              background: layers[l.key] ? "#3b82f6" : "rgba(255, 255, 255, 0.1)",
-              color: layers[l.key] ? "#ffffff" : "#cbd5e1",
-            }}
-          >
-            {layers[l.key] ? "● " : "○ "}{l.label}
-          </button>
-        ))}
+            {OPENFREEMAP_STYLES.map((st) => (
+              <option key={st.id} value={st.id} style={{ color: "#0f172a" }}>
+                {st.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Floating Nearest Resource Recommendation Card */}
