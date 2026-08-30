@@ -2,17 +2,21 @@
 
 import { useRouter } from "next/navigation";
 import { LanguageSelect } from "@/components/ui/LanguageSelect";
-import { UserCheck } from "lucide-react";
+import { UserCheck, Menu, Crown, HardHat } from "lucide-react";
 
 interface RescuerHeaderProps {
   currentRescuerId: string;
   rescuerName?: string;
+  isTeamHead?: boolean;
   status?: string;
+  onOpenMobileNav?: () => void;
 }
 
 export function RescuerHeader({
   currentRescuerId,
   rescuerName = "NDRF Rescue Unit",
+  isTeamHead = true,
+  onOpenMobileNav,
 }: RescuerHeaderProps) {
   const router = useRouter();
 
@@ -32,12 +36,32 @@ export function RescuerHeader({
   return (
     <header className="admin-topbar">
       <div className="flex items-center gap-3 min-w-0">
-        <span className="admin-topbar__title">Rescuer Field Portal</span>
+        {onOpenMobileNav && (
+          <button
+            type="button"
+            onClick={onOpenMobileNav}
+            className="md:hidden p-1.5 text-slate-700 hover:text-slate-900 border border-slate-300"
+            aria-label="Open menu"
+          >
+            <Menu size={18} />
+          </button>
+        )}
+        <span className="admin-topbar__title">Rescuer Command Portal</span>
         <span className="hidden md:inline-flex items-center gap-1.5 border border-slate-300 px-2.5 py-1 text-[11px]">
           <UserCheck size={13} className="text-[color:var(--a-accent)]" />
-          <span className="text-slate-500 font-semibold">Unit</span>
+          <span className="text-slate-500 font-semibold">Unit:</span>
           <span className="text-slate-900 font-bold truncate">{rescuerName}</span>
           <span className="text-slate-400 font-mono">({currentRescuerId})</span>
+        </span>
+        <span
+          className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide border ${
+            isTeamHead
+              ? "bg-amber-100 text-amber-900 border-amber-300"
+              : "bg-teal-100 text-teal-900 border-teal-300"
+          }`}
+        >
+          {isTeamHead ? <Crown size={11} /> : <HardHat size={11} />}
+          {isTeamHead ? "Team Head" : "Field Member"}
         </span>
       </div>
 

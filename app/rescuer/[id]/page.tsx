@@ -7,11 +7,14 @@ import { TeamHeadVolunteerPool } from "@/components/rescuer/TeamHeadVolunteerPoo
 import { RescuerShell } from "@/components/rescuer/RescuerShell";
 import { SupplyTracker } from "@/components/rescuer/SupplyTracker";
 import { DisasterAssignmentCard } from "@/components/rescuer/DisasterAssignmentCard";
-import { IncidentMap } from "@/components/incidents/IncidentMap";
+import { DistrictHeadConnection } from "@/components/rescuer/DistrictHeadConnection";
+import { ReadOnlyDisasterMap } from "@/components/rescuer/ReadOnlyDisasterMap";
+import { MemberResourceAllocationManager } from "@/components/rescuer/MemberResourceAllocationManager";
+import { MemberFieldPortal } from "@/components/rescuer/MemberFieldPortal";
 import { apiGetAllIncidents, apiGetIncidentsForOfficeRegion, ReportItem } from "@/lib/api";
 import { fetchRescuerSession, RescuerUserSession } from "@/lib/rescuerAuth";
 import { RescuerSupply, RescuerUnitProfile } from "@/types/rescuer";
-import { RotateCw, MapPin, LogIn } from "lucide-react";
+import { RotateCw, MapPin, LogIn, Crown, HardHat, Radio, Eye, PackagePlus } from "lucide-react";
 
 // Mock Rescuer Database mapping
 const INITIAL_RESCUER_PROFILES: Record<string, RescuerUnitProfile> = {
@@ -23,8 +26,8 @@ const INITIAL_RESCUER_PROFILES: Record<string, RescuerUnitProfile> = {
     leaderName: "Captain Rajesh Verma",
     phone: "+91 98765 11001",
     status: "available",
-    lat: 19.0760,
-    lng: 72.8777,
+    lat: 19.3150,
+    lng: 84.7940,
     supplies: {
       foodRationKits: 120,
       foodRationCapacity: 200,
@@ -128,6 +131,10 @@ export default function RescuerDetailPage({
   const [session, setSession] = useState<RescuerUserSession | null>(null);
   const sessionRef = useRef<RescuerUserSession | null>(null);
 
+  // Role state: defaults to Team Head, can be toggled
+  const [isTeamHead, setIsTeamHead] = useState<boolean>(true);
+  const [activeTab, setActiveTab] = useState<string>("overview");
+
   const [profile, setProfile] = useState<RescuerUnitProfile>(
     INITIAL_RESCUER_PROFILES[rescuerId] || INITIAL_RESCUER_PROFILES["demo-team-alpha"]
   );
@@ -142,6 +149,12 @@ export default function RescuerDetailPage({
       if (cancelled) return;
       sessionRef.current = s;
       setSession(s);
+      if (s) {
+        setIsTeamHead(s.isTeamHead);
+        if (!s.isTeamHead) {
+          setActiveTab("member-portal");
+        }
+      }
       loadData();
     });
     return () => {
@@ -158,7 +171,7 @@ export default function RescuerDetailPage({
         data = await apiGetIncidentsForOfficeRegion(
           userSession.officeLat,
           userSession.officeLng,
-          userSession.regionRadiusKm || 25
+          userSession.regionRadiusKm || 35
         );
       } else {
         data = await apiGetAllIncidents();
@@ -180,6 +193,15 @@ export default function RescuerDetailPage({
     setProfile(INITIAL_RESCUER_PROFILES[rescuerId] || INITIAL_RESCUER_PROFILES["demo-team-alpha"]);
   }, [rescuerId]);
 
+  function handleRoleToggle(head: boolean) {
+    setIsTeamHead(head);
+    if (head) {
+      setActiveTab("overview");
+    } else {
+      setActiveTab("member-portal");
+    }
+  }
+
   function handleStatusChange(newStatus: "available" | "en_route" | "at_scene") {
     setProfile((prev) => ({ ...prev, status: newStatus }));
   }
@@ -200,49 +222,65 @@ export default function RescuerDetailPage({
     setProfile((prev) => ({ ...prev, supplies: updated }));
   }
 
+  const officeLat = session?.officeLat || profile.lat;
+  const officeLng = session?.officeLng || profile.lng;
+  const officeName = session?.officeName || "Brahmapur Regional Disaster Command";
+  const commanderName = session?.name || profile.leaderName;
+
   return (
     <RescuerShell
       rescuerId={rescuerId}
       rescuerName={profile.name}
       status={profile.status}
+      isTeamHead={isTeamHead}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      onToggleRole={handleRoleToggle}
     >
-      {/* Session / regional office */}
+      {/* ── Top Header Strip ── */}
       <div className="adm-card">
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div className="space-y-2 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="adm-status adm-status--mute font-mono">{profile.callsign}</span>
-              <span className="adm-status adm-status--blue">
-                {session?.isTeamHead ? "Team head / commander" : "Field rescuer"}
+              <span className={`adm-status ${isTeamHead ? "adm-status--amber" : "adm-status--green"} flex items-center gap-1`}>
+                {isTeamHead ? <Crown size={12} /> : <HardHat size={12} />}
+                {isTeamHead ? "Rescue Team Head / Commander" : "Normal Field Rescuer / Squad Member"}
               </span>
-              {session && (
-                <span className="adm-status adm-status--green">
-                  {session.officeName} · {session.regionRadiusKm} km
-                </span>
-              )}
+              <span className="adm-status adm-status--blue">
+                {officeName} · {session?.regionRadiusKm || 25} km
+              </span>
             </div>
 
             <h1 className="text-xl font-bold text-slate-900">
               {profile.name}
-              {session && (
-                <span className="ml-2 text-xs font-normal text-slate-500">({session.email})</span>
-              )}
+              <span className="ml-2 text-xs font-normal text-slate-500">
+                ({isTeamHead ? "Command Authority" : "Field Operations Unit"})
+              </span>
             </h1>
 
             <p className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
-              <span>Commander: <b className="text-slate-800">{session?.name || profile.leaderName}</b></span>
+              <span>Commander: <b className="text-slate-800">{commanderName}</b></span>
               <span>·</span>
-              <span>Office base: <b className="text-slate-800">{session?.officeName || "Regional Base Command"}</b></span>
+              <span>Office Base: <b className="text-slate-800">{officeName}</b></span>
               <span>·</span>
               <span className="flex items-center gap-1 font-mono">
-                <MapPin size={12} /> {(session?.officeLat ?? profile.lat).toFixed(4)}, {(session?.officeLng ?? profile.lng).toFixed(4)}
+                <MapPin size={12} /> {officeLat.toFixed(4)}, {officeLng.toFixed(4)}
               </span>
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => handleRoleToggle(!isTeamHead)}
+              className="adm-btn text-xs font-bold"
+              title="Quickly switch between Team Head and Member roles"
+            >
+              Switch to {isTeamHead ? "Field Member View" : "Team Head View"}
+            </button>
             <Link href="/rescuer/login" className="adm-btn">
-              <LogIn size={14} /> Office login
+              <LogIn size={14} /> Office Login
             </Link>
             <button onClick={loadData} className="adm-btn">
               <RotateCw size={14} /> Refresh
@@ -251,48 +289,189 @@ export default function RescuerDetailPage({
         </div>
       </div>
 
-      {/* Disaster Assignment & Fail-Safe Control */}
-      <DisasterAssignmentCard
-        rescuerId={rescuerId}
-        rescuerType={profile.type}
-        rescuerLat={profile.lat}
-        rescuerLng={profile.lng}
-        assignedIncident={assignedIncident}
-        allIncidents={incidents}
-        onAssignmentChange={handleAssignmentChange}
-        onStatusChange={handleStatusChange}
-      />
+      {/* ═════════════════════════════════════════════════════════════════════
+          A. RESCUE TEAM HEAD VIEWS
+         ═════════════════════════════════════════════════════════════════════ */}
+      {isTeamHead && (
+        <>
+          {/* TAB 1: OVERVIEW / DASHBOARD */}
+          {activeTab === "overview" && (
+            <div className="space-y-6">
+              {/* Quick Navigation Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div
+                  onClick={() => setActiveTab("district-head")}
+                  className="p-4 border border-amber-300 bg-amber-50/50 cursor-pointer hover:bg-amber-50 transition-all space-y-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-amber-900 flex items-center gap-1">
+                      <Radio size={12} /> District Head Connection
+                    </span>
+                    <span className="text-[10px] bg-amber-500 text-white font-bold px-1.5 py-0.5 rounded-sm">
+                      Head Only
+                    </span>
+                  </div>
+                  <h3 className="font-bold text-sm text-amber-950">Official Admin Directives</h3>
+                  <p className="text-[11px] text-amber-800">
+                    Access orders, notifications, and broadcast messages from District Head.
+                  </p>
+                </div>
 
-      {/* Rescue Team Head Resource Estimator & Directive Broadcast */}
-      <RescueHeadResourceEstimator
-        assignedIncident={assignedIncident}
-        rescuerId={rescuerId}
-        leaderName={profile.leaderName}
-      />
+                <div
+                  onClick={() => setActiveTab("disasters")}
+                  className="p-4 border border-slate-300 bg-slate-50/70 cursor-pointer hover:bg-slate-100 transition-all space-y-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-slate-700 flex items-center gap-1">
+                      <Eye size={12} /> Tactical Radar
+                    </span>
+                    <span className="text-[10px] bg-slate-700 text-white font-bold px-1.5 py-0.5 rounded-sm">
+                      Read-Only
+                    </span>
+                  </div>
+                  <h3 className="font-bold text-sm text-slate-900">Nearest Disaster Watch Map</h3>
+                  <p className="text-[11px] text-slate-600">
+                    Observe active citizen SOS incidents sent to admin in real time.
+                  </p>
+                </div>
 
-      {/* Rescue Team Head Direct Volunteer Request Stream */}
-      <TeamHeadVolunteerPool
-        officeLat={session?.officeLat || profile.lat}
-        officeLng={session?.officeLng || profile.lng}
-        officeName={session?.officeName || "Regional Base Command"}
-        isTeamHead={session ? session.isTeamHead : true}
-      />
+                <div
+                  onClick={() => setActiveTab("allocate")}
+                  className="p-4 border border-teal-300 bg-teal-50/50 cursor-pointer hover:bg-teal-50 transition-all space-y-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold text-teal-900 flex items-center gap-1">
+                      <PackagePlus size={12} /> Member Allocation
+                    </span>
+                    <span className="text-[10px] bg-teal-700 text-white font-bold px-1.5 py-0.5 rounded-sm">
+                      Live Sync
+                    </span>
+                  </div>
+                  <h3 className="font-bold text-sm text-teal-950">Ration &amp; Resource Assignment</h3>
+                  <p className="text-[11px] text-teal-800">
+                    Assign quotas to field members; automatically deducts from Admin pool.
+                  </p>
+                </div>
+              </div>
 
-      {/* Map View of Assigned / Nearest Disaster */}
-      <div className="space-y-2">
-        <h3 className="eyebrow">Active tactical map</h3>
-        <IncidentMap
-          incidents={assignedIncident ? [assignedIncident] : incidents}
-          selectedIncidentId={assignedIncident?.id}
-          isConnected={true}
-        />
-      </div>
+              {/* Disaster Assignment & Fail-Safe Control */}
+              <DisasterAssignmentCard
+                rescuerId={rescuerId}
+                rescuerType={profile.type}
+                rescuerLat={profile.lat}
+                rescuerLng={profile.lng}
+                assignedIncident={assignedIncident}
+                allIncidents={incidents}
+                onAssignmentChange={handleAssignmentChange}
+                onStatusChange={handleStatusChange}
+              />
 
-      {/* Field Supply & Capacity Inventory Tracker */}
-      <SupplyTracker
-        initialSupplies={profile.supplies}
-        onUpdateSupplies={handleUpdateSupplies}
-      />
+              {/* Rescue Team Head Resource Estimator & Directive Broadcast */}
+              <RescueHeadResourceEstimator
+                assignedIncident={assignedIncident}
+                rescuerId={rescuerId}
+                leaderName={commanderName}
+              />
+
+              {/* Rescue Team Head Direct Volunteer Request Stream */}
+              <TeamHeadVolunteerPool
+                officeLat={officeLat}
+                officeLng={officeLng}
+                officeName={officeName}
+                isTeamHead={true}
+              />
+
+              {/* Field Supply & Capacity Inventory Tracker */}
+              <SupplyTracker
+                initialSupplies={profile.supplies}
+                onUpdateSupplies={handleUpdateSupplies}
+              />
+            </div>
+          )}
+
+          {/* TAB 2: READ-ONLY DISASTER MAP */}
+          {activeTab === "disasters" && (
+            <ReadOnlyDisasterMap
+              incidents={incidents}
+              userLat={officeLat}
+              userLng={officeLng}
+              officeName={officeName}
+            />
+          )}
+
+          {/* TAB 3: DISTRICT HEAD CONNECTION (EXCLUSIVE FOR RESCUE TEAM HEAD) */}
+          {activeTab === "district-head" && (
+            <DistrictHeadConnection
+              headUnitId={rescuerId}
+              headName={commanderName}
+              officeName={officeName}
+            />
+          )}
+
+          {/* TAB 4: RATION & RESOURCE ALLOCATION TO MEMBERS */}
+          {activeTab === "allocate" && (
+            <MemberResourceAllocationManager
+              teamId={rescuerId}
+              headName={commanderName}
+              headOffice={officeName}
+            />
+          )}
+
+          {/* TAB 5: VOLUNTEER POOL */}
+          {activeTab === "volunteers" && (
+            <TeamHeadVolunteerPool
+              officeLat={officeLat}
+              officeLng={officeLng}
+              officeName={officeName}
+              isTeamHead={true}
+            />
+          )}
+
+          {/* TAB 6: SUPPLY INVENTORY */}
+          {activeTab === "supplies" && (
+            <SupplyTracker
+              initialSupplies={profile.supplies}
+              onUpdateSupplies={handleUpdateSupplies}
+            />
+          )}
+        </>
+      )}
+
+      {/* ═════════════════════════════════════════════════════════════════════
+          B. NORMAL RESCUE TEAM MEMBER VIEWS
+         ═════════════════════════════════════════════════════════════════════ */}
+      {!isTeamHead && (
+        <>
+          {/* TAB 1: MEMBER ORDERS & LIVE RESOURCE COMPLETION */}
+          {activeTab === "member-portal" && (
+            <MemberFieldPortal
+              teamId={rescuerId}
+              teamName={profile.name}
+              memberId="mem-01"
+              memberName="Officer Ramesh Patnaik"
+              headName={commanderName}
+              headPhone={profile.phone || "+91 98765 11001"}
+              headOffice={officeName}
+            />
+          )}
+
+          {/* TAB 2: MEMBER UNIT SUPPLIES */}
+          {activeTab === "member-supplies" && (
+            <div className="space-y-4">
+              <div className="adm-card border-l-[4px] border-l-[#115e59]">
+                <h2 className="text-base font-bold text-slate-900">Unit Supply Inventory</h2>
+                <p className="text-xs text-slate-500">
+                  Field gear and vehicle loadout currently deployed with {profile.name}.
+                </p>
+              </div>
+              <SupplyTracker
+                initialSupplies={profile.supplies}
+                onUpdateSupplies={handleUpdateSupplies}
+              />
+            </div>
+          )}
+        </>
+      )}
     </RescuerShell>
   );
 }

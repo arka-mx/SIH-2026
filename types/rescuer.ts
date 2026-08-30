@@ -118,3 +118,62 @@ export interface VolunteerPledge {
   submittedAt: string;
 }
 
+// ── District Head (Admin Head) Connection Directives ──
+export interface DistrictHeadDirective {
+  id: string;
+  adminName: string;
+  headUnitId: string;
+  title: string;
+  message: string;
+  type: "order" | "notification" | "message" | "priority_dispatch";
+  priority: "critical" | "high" | "normal";
+  issuedAt: string;
+  acknowledged: boolean;
+  acknowledgedAt?: string;
+  acknowledgmentNote?: string;
+  attachedResourceTarget?: {
+    type: string;
+    amount: number;
+    unit: string;
+  };
+}
+
+// ── Resource Quota Assigned to Member ──
+export interface ResourceRequirementItem {
+  key: string;
+  name: string;
+  targetAmount: number;
+  gatheredAmount: number;
+  unit: string;
+  adminResourceName: string;
+}
+
+// ── Member Order & Ration Allocation from Rescue Team Head ──
+export interface MemberOrderAllocation {
+  id: string;
+  teamId: string;
+  teamName: string;
+  headName: string;
+  headPhone: string;
+  headOffice: string;
+  memberId: string;
+  memberName: string;
+  memberRole: string;
+  title: string;
+  instructions: string;
+  status: "pending" | "gathering" | "completed";
+  assignedAt: string;
+  updatedAt: string;
+  resources: ResourceRequirementItem[];
+}
+
+// ── Field Team Member Profile ──
+export interface TeamMember {
+  id: string;
+  name: string;
+  callsign: string;
+  phone: string;
+  role: string;
+  status: "active" | "standby" | "field_dispatched";
+}
+

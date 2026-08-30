@@ -25,6 +25,8 @@ export default function ResourcesPage() {
 
   useEffect(() => {
     loadResources();
+    const interval = setInterval(loadResources, 4000);
+    return () => clearInterval(interval);
   }, []);
 
   const totalCapacity = resources.reduce((sum, res) => sum + (res.capacity_total || 0), 0);

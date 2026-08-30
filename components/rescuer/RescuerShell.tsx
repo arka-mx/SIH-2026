@@ -1,11 +1,18 @@
-import { ReactNode } from "react";
+"use client";
+
+import { ReactNode, useState } from "react";
 import { RescuerHeader } from "./RescuerHeader";
+import { RescuerNavigation } from "./RescuerNavigation";
 
 interface RescuerShellProps {
   children: ReactNode;
   rescuerId: string;
   rescuerName?: string;
   status?: string;
+  isTeamHead?: boolean;
+  activeTab?: string;
+  onTabChange?: (tab: string) => void;
+  onToggleRole?: (head: boolean) => void;
 }
 
 export function RescuerShell({
@@ -13,17 +20,38 @@ export function RescuerShell({
   rescuerId,
   rescuerName,
   status = "available",
+  isTeamHead = true,
+  activeTab = "overview",
+  onTabChange,
+  onToggleRole,
 }: RescuerShellProps) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   return (
     <div className="admin-shell">
       <RescuerHeader
         currentRescuerId={rescuerId}
         rescuerName={rescuerName}
+        isTeamHead={isTeamHead}
         status={status}
+        onOpenMobileNav={() => setMobileOpen(true)}
       />
-      <main className="rescuer-main">
-        <div className="space-y-6">{children}</div>
-      </main>
+
+      <div className="admin-frame">
+        <RescuerNavigation
+          rescuerId={rescuerId}
+          isTeamHead={isTeamHead}
+          activeTab={activeTab}
+          onTabChange={onTabChange}
+          onToggleRole={onToggleRole}
+          mobileOpen={mobileOpen}
+          onCloseMobile={() => setMobileOpen(false)}
+        />
+
+        <main className="admin-main">
+          <div className="space-y-6">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }
