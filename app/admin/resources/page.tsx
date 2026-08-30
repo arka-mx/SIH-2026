@@ -5,7 +5,7 @@ import { AdminShell } from "@/components/layout/AdminShell";
 import { ResourceCard } from "@/components/resources/ResourceCard";
 import { ResourceMap } from "@/components/resources/ResourceMap";
 import { apiGetAllResources, ResourceItem } from "@/lib/api";
-import { RotateCw, PackageCheck, Layers } from "lucide-react";
+import { RotateCw } from "lucide-react";
 
 export default function ResourcesPage() {
   const [resources, setResources] = useState<ResourceItem[]>([]);
@@ -35,51 +35,41 @@ export default function ResourcesPage() {
   return (
     <AdminShell>
       <div className="page-heading">
-        <div>
-          <p className="eyebrow">District Inventory and Deployment</p>
-          <h1>Emergency Response Assets</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={loadResources}
-            className="flex items-center gap-1 text-xs bg-white border border-stone-200 hover:border-emerald-500 px-3 py-1.5 rounded-lg shadow-2xs transition-all"
-          >
+        <h1>Resources</h1>
+        <div className="flex items-center gap-3">
+          <span className="login-note">
+            {resources.length} assets · {totalUsed.toLocaleString()} deployed
+          </span>
+          <button onClick={loadResources} className="adm-btn">
             <RotateCw size={13} /> Refresh
           </button>
-          <span className="login-note">
-            {resources.length} tracked asset(s) · {totalUsed.toLocaleString()} units deployed
-          </span>
         </div>
       </div>
 
       <div className="resource-overview">
         <div className="resource-stat">
-          <span>Total Capacity</span>
+          <span>Capacity</span>
           <strong>{totalCapacity.toLocaleString()}</strong>
-          <small>across all response depots</small>
         </div>
         <div className="resource-stat">
-          <span>Currently Deployed</span>
+          <span>Deployed</span>
           <strong>{totalUsed.toLocaleString()}</strong>
-          <small>active disaster allocations</small>
         </div>
         <div className="resource-stat">
-          <span>Available Assets</span>
+          <span>Available</span>
           <strong>{availableCount}</strong>
-          <small>ready for instant dispatch</small>
         </div>
         <div className="resource-stat">
-          <span>In Action</span>
+          <span>In action</span>
           <strong>{deployedCount}</strong>
-          <small>en route or at scene</small>
         </div>
       </div>
 
       <ResourceMap resources={resources} />
 
       {loading ? (
-        <div className="p-8 text-center text-sm text-stone-500 bg-white rounded-xl border border-stone-200">
-          Loading district resource inventory...
+        <div className="empty-state">
+          <p>Loading…</p>
         </div>
       ) : (
         <div className="resource-grid">

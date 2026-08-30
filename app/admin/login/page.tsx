@@ -1,21 +1,22 @@
 "use client";
 
-import { FormEvent, useState, useEffect } from "react";
+import { FormEvent, useState } from "react";
 import { ArrowRight, ShieldCheck, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { PublicHeader } from "@/components/public/PublicHeader";
+import { BackButton } from "@/components/public/BackButton";
+import { useLanguage } from "@/lib/language";
 
 const TRANSLATIONS = {
   English: {
     kicker: "Secure operations access",
     heading: "Welcome, coordinator.",
     subheading: "Verify your official credentials to access the emergency dashboard.",
-    title: "Admin access",
+    title: "Admin sign in",
     username: "Username",
     password: "Password",
-    submit: "Open admin dashboard",
-    loading: "Authenticating...",
-    error: "Invalid coordinator credentials"
+    submit: "Sign in",
+    loading: "Signing in…",
+    error: "Invalid credentials"
   },
   Hindi: {
     kicker: "सुरक्षित संचालन पहुंच",
@@ -67,28 +68,13 @@ type SupportedLang = "English" | "Hindi" | "Bengali" | "Odia" | "Telugu";
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [lang, setLang] = useState<SupportedLang>("English");
+  const { name: lang } = useLanguage();
   const [username, setUsername] = useState(process.env.NEXT_PUBLIC_DEFAULT_ADMIN_USERNAME || "admin");
   const [password, setPassword] = useState(process.env.NEXT_PUBLIC_DEFAULT_ADMIN_PASSWORD || "admin123");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const stored = localStorage.getItem("momentum_language");
-    if (stored === "Hindi" || stored === "hi") {
-      setLang("Hindi");
-    } else if (stored === "Bengali" || stored === "bn") {
-      setLang("Bengali");
-    } else if (stored === "Odia" || stored === "or") {
-      setLang("Odia");
-    } else if (stored === "Telugu" || stored === "te") {
-      setLang("Telugu");
-    } else {
-      setLang("English");
-    }
-  }, []);
-
-  const t = TRANSLATIONS[lang] || TRANSLATIONS.English;
+  const t = TRANSLATIONS[lang as SupportedLang] || TRANSLATIONS.English;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -107,7 +93,7 @@ export default function AdminLoginPage() {
         throw new Error(data.error || t.error);
       }
 
-      router.push("/admin");
+      router.push(data.redirect || "/admin");
       router.refresh();
     } catch (err: any) {
       setError(err.message || t.error);
@@ -117,14 +103,9 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <main className="public-home">
-      <PublicHeader />
+    <main className="public-home theme-light">
+      <BackButton />
       <section className="access-form-layout">
-        <div>
-          <p className="hero-kicker">{t.kicker}</p>
-          <h1>{t.heading}</h1>
-          <p>{t.subheading}</p>
-        </div>
         <form className="access-form" onSubmit={handleSubmit}>
           <div className="form-icon">
             <ShieldCheck size={24} />
@@ -132,7 +113,7 @@ export default function AdminLoginPage() {
           <h2>{t.title}</h2>
 
           {error && (
-            <div className="bg-red-50 text-red-700 text-xs p-3 rounded-lg border border-red-200 flex items-center gap-2 mb-2">
+            <div className="bg-red-50 text-red-700 text-xs p-3 border border-red-200 flex items-center gap-2 mb-2">
               <AlertCircle size={15} />
               <span>{error}</span>
             </div>

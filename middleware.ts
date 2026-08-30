@@ -1,32 +1,44 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/jwt-edge";
 
-export function middleware(request: NextRequest) {
-  const path = request.nextUrl.pathname;
+type SessionClaims =
+  | { role: "admin"; sub: string }
+  | { role: "rescuer"; sub: string; rescuerId: string };
 
-  // Protect admin paths
-  if (path.startsWith("/admin") && path !== "/admin/login") {
-    const adminSession = request.cookies.get("momentum_admin_session")?.value;
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
 
-    if (!adminSession) {
-      // Redirect to admin login page
-      return NextResponse.redirect(new URL("/admin/login", request.url));
+  const token = req.cookies.get(SESSION_COOKIE)?.value;
+  const session = token ? await verifySessionToken<SessionClaims>(token) : null;
+
+  const isEntry =
+    pathname === "/" || pathname === "/admin/login" || pathname === "/rescuer/login";
+  const isAdminArea = pathname.startsWith("/admin") && pathname !== "/admin/login";
+  const isRescuerArea = pathname.startsWith("/rescuer") && pathname !== "/rescuer/login";
+
+  // A signed-in user landing on the home / login screens goes straight to their workspace.
+  if (isEntry && session) {
+    if (session.role === "admin") {
+      return NextResponse.redirect(new URL("/admin", req.url));
+    }
+    if (session.role === "rescuer") {
+      return NextResponse.redirect(
+        new URL(`/rescuer/${encodeURIComponent(session.rescuerId)}`, req.url)
+      );
     }
   }
 
-  // Protect rescuer paths (prevent changing route IDs manually)
-  if (path.startsWith("/rescuer") && path !== "/rescuer/login") {
-    const adminSession = request.cookies.get("momentum_admin_session")?.value;
-    const rescuerSession = request.cookies.get("momentum_rescuer_session")?.value;
+  if (isAdminArea && session?.role !== "admin") {
+    return NextResponse.redirect(new URL("/admin/login", req.url));
+  }
 
-    // Segment extraction: e.g. "/rescuer/demo-team-alpha" -> targetId = "demo-team-alpha"
-    const segments = path.split("/");
-    const targetId = segments[2];
-
-    if (!adminSession) {
-      if (!rescuerSession || (targetId && rescuerSession !== targetId)) {
-        return NextResponse.redirect(new URL("/rescuer/login", request.url));
-      }
+  if (isRescuerArea) {
+    const targetId = pathname.split("/")[2];
+    const allowed =
+      session?.role === "admin" ||
+      (session?.role === "rescuer" && (!targetId || session.rescuerId === targetId));
+    if (!allowed) {
+      return NextResponse.redirect(new URL("/rescuer/login", req.url));
     }
   }
 
@@ -34,8 +46,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/admin/:path*",
-    "/rescuer/:path*",
-  ],
+  matcher: ["/", "/admin/:path*", "/rescuer/:path*"],
 };

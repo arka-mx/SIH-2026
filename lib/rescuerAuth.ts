@@ -10,28 +10,30 @@ export interface RescuerUserSession {
   officeLat: number;
   officeLng: number;
   regionRadiusKm: number;
-  loggedInAt: string;
 }
 
-const RESCUER_SESSION_KEY = "sih_rescuer_user_session";
-
-export function saveRescuerSession(session: RescuerUserSession): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(RESCUER_SESSION_KEY, JSON.stringify(session));
-}
-
-export function getRescuerSession(): RescuerUserSession | null {
-  if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem(RESCUER_SESSION_KEY);
-  if (!raw) return null;
+/**
+ * Reads the current rescuer session from the server (JWT cookie is HttpOnly).
+ * Returns null when not signed in as a rescuer.
+ */
+export async function fetchRescuerSession(): Promise<RescuerUserSession | null> {
   try {
-    return JSON.parse(raw) as RescuerUserSession;
+    const res = await fetch("/api/auth/session", { cache: "no-store" });
+    if (!res.ok) return null;
+    const { user } = await res.json();
+    if (!user || user.role !== "rescuer") return null;
+    return {
+      id: user.sub,
+      email: user.email ?? "",
+      name: user.name ?? "",
+      photoUrl: user.picture,
+      isTeamHead: Boolean(user.isTeamHead),
+      officeName: user.officeName ?? "",
+      officeLat: Number(user.officeLat) || 0,
+      officeLng: Number(user.officeLng) || 0,
+      regionRadiusKm: Number(user.regionRadiusKm) || 25,
+    };
   } catch {
     return null;
   }
-}
-
-export function clearRescuerSession(): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(RESCUER_SESSION_KEY);
 }

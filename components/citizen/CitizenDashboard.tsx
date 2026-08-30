@@ -30,6 +30,8 @@ import {
 import { fetchIpBasedSessionId, createNewSessionId } from "@/lib/session";
 import { CitizenLiveTrackingMap } from "@/components/citizen/CitizenLiveTrackingMap";
 import { WeatherWidget } from "@/components/ui/WeatherWidget";
+import { useLanguage } from "@/lib/language";
+import { LanguageSelect } from "@/components/ui/LanguageSelect";
 
 const TRANSLATIONS = {
   en: {
@@ -247,7 +249,7 @@ const TRANSLATIONS = {
 type SupportedLangKey = "en" | "hi" | "bn" | "or" | "te";
 
 export function CitizenDashboard() {
-  const [lang, setLang] = useState<SupportedLangKey>("en");
+  const { code: lang } = useLanguage();
   const [sessionId, setSessionId] = useState<string>("");
   const [lat, setLat] = useState<string>("19.0760");
   const [lng, setLng] = useState<string>("72.8777");
@@ -268,6 +270,12 @@ export function CitizenDashboard() {
   const [submittedReport, setSubmittedReport] = useState<ReportItem | null>(null);
   const [activeExistingReport, setActiveExistingReport] = useState<ReportItem | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Prefill the emergency location when arriving from a scanned shelter poster.
+  useEffect(() => {
+    const loc = new URLSearchParams(window.location.search).get("loc");
+    if (loc) setLocationName(loc);
+  }, []);
 
   // Initialize IP-based session ID & check for active report
   useEffect(() => {
@@ -415,31 +423,7 @@ export function CitizenDashboard() {
         <div className="flex items-center gap-3">
           <WeatherWidget lat={parseFloat(lat) || 19.0760} lng={parseFloat(lng) || 72.8777} />
 
-          <div className="flex items-center gap-1 bg-white border border-stone-200 px-2 py-1 rounded-md shadow-2xs">
-            <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mr-1">LANG:</span>
-            <select
-              value={lang}
-              onChange={(e) => {
-                const selected = e.target.value as SupportedLangKey;
-                setLang(selected);
-                const mapping: Record<SupportedLangKey, string> = {
-                  en: "English",
-                  hi: "Hindi",
-                  bn: "Bengali",
-                  or: "Odia",
-                  te: "Telugu"
-                };
-                localStorage.setItem("momentum_language", mapping[selected]);
-              }}
-              className="text-xs bg-transparent border-0 outline-none font-bold text-stone-700 cursor-pointer"
-            >
-              <option value="en">English</option>
-              <option value="hi">हिन्दी</option>
-              <option value="bn">বাংলা</option>
-              <option value="or">ଓଡ଼ିଆ</option>
-              <option value="te">తెలుగు</option>
-            </select>
-          </div>
+          <LanguageSelect variant="compact" />
 
           <span className="login-note flex items-center gap-1.5 border border-emerald-300 bg-emerald-50/80 px-3 py-1 rounded-xl">
             <ShieldCheck size={14} className="text-emerald-600" />

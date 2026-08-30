@@ -1,5 +1,6 @@
-import { Activity, AlertTriangle, MapPin, Siren, CheckCircle } from "lucide-react";
+import { Siren } from "lucide-react";
 import { ReportItem } from "@/lib/api";
+import { AdminLocationControl } from "@/components/admin/AdminLocationControl";
 
 export function EmergencyStats({ incidents = [] }: { incidents?: ReportItem[] }) {
   const verifiedCount = incidents.filter((i) => i.status === "verified").length;
@@ -11,27 +12,23 @@ export function EmergencyStats({ incidents = [] }: { incidents?: ReportItem[] })
     <div className="emergency-bar">
       <div>
         <span className="emergency-kicker">
-          <Siren size={14} /> Active Emergency Response Hub
+          <Siren size={14} /> Active
         </span>
-        <strong>
-          <MapPin size={15} /> Mumbai / Multi-District Command Center
-        </strong>
+        <div className="emergency-place">
+          <AdminLocationControl />
+        </div>
       </div>
       <div className="emergency-metrics">
         <span>
-          <AlertTriangle size={15} className="text-amber-500" />
           {unverifiedCount} <small>Unverified</small>
         </span>
         <span>
-          <Activity size={15} className="text-emerald-600" />
           {verifiedCount} <small>Verified</small>
         </span>
         <span>
-          <Activity size={15} className="text-blue-600" />
-          {inProgressCount} <small>In Progress</small>
+          {inProgressCount} <small>In progress</small>
         </span>
         <span>
-          <CheckCircle size={15} className="text-stone-500" />
           {resolvedCount} <small>Resolved</small>
         </span>
       </div>

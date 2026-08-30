@@ -1,6 +1,23 @@
 import { ReactNode } from "react";
 
-export function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "green" | "red" | "amber" }) {
-  const tones = { neutral: "bg-[#edf2e7] text-[#516253]", green: "bg-[#dff0df] text-[#27704d]", red: "bg-[#ffe0dc] text-[#a52c26]", amber: "bg-[#fff0ca] text-[#8b6418]" };
-  return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${tones[tone]}`}>{children}</span>;
+export function Badge({
+  children,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  tone?: "neutral" | "green" | "red" | "amber";
+}) {
+  const tones = {
+    neutral: "text-slate-600 border-slate-300",
+    green: "text-green-700 border-green-300",
+    red: "text-red-700 border-red-300",
+    amber: "text-amber-700 border-amber-300",
+  };
+  return (
+    <span
+      className={`inline-flex items-center border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.09em] ${tones[tone]}`}
+    >
+      {children}
+    </span>
+  );
 }

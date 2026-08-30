@@ -12,8 +12,8 @@ interface IncidentListProps {
 export function IncidentList({ incidents, compact = false, onUpdate }: IncidentListProps) {
   if (!incidents || incidents.length === 0) {
     return (
-      <div className="p-8 text-center bg-white rounded-xl border border-stone-200 text-stone-400 text-sm">
-        No incidents found in this category.
+      <div className="empty-state">
+        <p>No incidents found in this category.</p>
       </div>
     );
   }

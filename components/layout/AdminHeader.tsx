@@ -1,18 +1,24 @@
 "use client";
 
-import Link from "next/link";
-import { House, ShieldCheck, LogOut } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { WeatherWidget } from "@/components/ui/WeatherWidget";
+import { LanguageSelect } from "@/components/ui/LanguageSelect";
 
-export function AdminHeader() {
+export function AdminHeader({
+  menuOpen = false,
+  onToggleMenu,
+}: {
+  menuOpen?: boolean;
+  onToggleMenu?: () => void;
+}) {
   const router = useRouter();
 
   async function handleLogout() {
     try {
       const res = await fetch("/api/auth/logout", { method: "POST" });
       if (res.ok) {
-        router.push("/admin/login");
+        const data = await res.json().catch(() => ({}));
+        router.push(data.redirect || "/");
         router.refresh();
       }
     } catch (err) {
@@ -21,24 +27,29 @@ export function AdminHeader() {
   }
 
   return (
-    <header className="admin-header">
-      <span className="brand-chip">
-        <ShieldCheck size={18} /> MOMENTUM
-      </span>
-      <div className="hidden text-center text-[14px] font-extrabold tracking-[0.2em] text-[#49614d] sm:block">
-        DISASTER RESPONSE COMMAND CENTER
-      </div>
-      <div className="flex items-center gap-3">
-        {/* Mumbai Emergency command weather cache feed */}
-        <WeatherWidget lat={19.0760} lng={72.8777} />
-        
-        <Link href="/" className="brand-chip" aria-label="Go to home">
-          <House size={16} /> HOME
-        </Link>
-        <button onClick={handleLogout} className="brand-chip cursor-pointer bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 flex items-center gap-1.5" aria-label="Logout">
-          <LogOut size={14} /> LOGOUT
+    <header className="admin-topbar">
+      <div className="admin-topbar__lead">
+        <button
+          type="button"
+          className="admin-topbar__menu"
+          aria-label="Open menu"
+          aria-expanded={menuOpen}
+          onClick={onToggleMenu}
+        >
+          <Menu size={18} />
         </button>
-        <span className="brand-chip bg-[#eae1cc]">CMD</span>
+        <span className="admin-topbar__title">Command Center</span>
+      </div>
+      <div className="admin-topbar__actions">
+        <LanguageSelect variant="compact" />
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="admin-chip admin-chip--danger"
+          aria-label="Log out"
+        >
+          <LogOut size={14} /> Log out
+        </button>
       </div>
     </header>
   );

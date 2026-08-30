@@ -15,7 +15,7 @@ import { PredeterminedPermissionSettings, CitizenResponse, ResponseTeamRequest, 
 import { IncidentMap } from "@/components/incidents/IncidentMap";
 import { ResponseTeamRequests } from "@/components/admin/ResponseTeamRequests";
 import { CitizenResponsesFeed } from "@/components/admin/CitizenResponsesFeed";
-import { ShieldCheck, Sparkles, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 export default function AdminPermissionsPage() {
   const [permissions, setPermissions] = useState<PredeterminedPermissionSettings | null>(null);
@@ -53,21 +53,10 @@ export default function AdminPermissionsPage() {
   return (
     <AdminShell>
       <div className="space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <h1 className="text-xl font-bold text-stone-900 flex items-center gap-2">
-              <ShieldCheck className="text-purple-600" size={24} /> Admin Auto-Alert Permissions & Radical Region Controls
-            </h1>
-            <p className="text-xs text-stone-500 mt-1">
-              Configure predetermined admin permissions for automatic citizen-to-rescuer SOS broadcasting in high-risk disaster zones.
-            </p>
-          </div>
-
-          <button
-            onClick={loadData}
-            className="px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold rounded-lg border border-stone-300 flex items-center gap-1.5 transition-all"
-          >
-            <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Refresh Data
+        <div className="page-heading">
+          <h1>Auto-alert rules</h1>
+          <button onClick={loadData} className="adm-btn">
+            <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Refresh
           </button>
         </div>
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { apiGetAllIncidents, ReportItem } from "@/lib/api";
-import { Sparkles, MapPin, Phone, Send, RotateCw } from "lucide-react";
+import { MapPin, Phone, RotateCw } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 
 export default function VolunteersPage() {
@@ -33,28 +33,22 @@ export default function VolunteersPage() {
   return (
     <AdminShell>
       <div className="page-heading">
-        <div>
-          <p className="eyebrow">People Network</p>
-          <h1>Community Resource Pledges</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={loadPledges}
-            className="flex items-center gap-1 text-xs bg-white border border-stone-200 hover:border-emerald-500 px-3 py-1.5 rounded-lg shadow-2xs transition-all"
-          >
+        <h1>Pledges</h1>
+        <div className="flex items-center gap-3">
+          <span className="login-note">{pledges.length} active</span>
+          <button onClick={loadPledges} className="adm-btn">
             <RotateCw size={13} /> Refresh
           </button>
-          <span className="login-note">{pledges.length} active pledges</span>
         </div>
       </div>
 
       {loading ? (
-        <div className="p-8 text-center text-sm text-stone-500 bg-white rounded-xl border border-stone-200">
-          Loading community resource pledges...
+        <div className="empty-state">
+          <p>Loading…</p>
         </div>
       ) : pledges.length === 0 ? (
-        <div className="p-8 text-center bg-white rounded-xl border border-stone-200 text-stone-400 text-sm">
-          No citizen resource pledges registered yet.
+        <div className="empty-state">
+          <p>No pledges yet.</p>
         </div>
       ) : (
         <div className="resource-grid">
@@ -67,36 +61,36 @@ export default function VolunteersPage() {
             const availabilityMatch = desc.match(/Availability:\s*([^.]+)/);
             const locationMatch = desc.match(/Location:\s*(.+)$/);
 
-            const name = nameMatch ? nameMatch[1].trim() : "Anonymous Citizen";
-            const contact = contactMatch ? contactMatch[1].trim() : "No contact number";
-            const item = itemMatch ? itemMatch[1].trim() : "General volunteer service";
+            const name = nameMatch ? nameMatch[1].trim() : "Anonymous";
+            const contact = contactMatch ? contactMatch[1].trim() : "No contact";
+            const item = itemMatch ? itemMatch[1].trim() : "Volunteer";
             const availability = availabilityMatch ? availabilityMatch[1].trim() : "Flexible";
-            const location = locationMatch ? locationMatch[1].trim() : "Mumbai Coastal Zone";
+            const location = locationMatch ? locationMatch[1].trim() : "—";
 
             return (
-              <article className="resource-card !p-4 bg-white rounded-xl border border-stone-200 shadow-2xs" key={pledge.id}>
+              <article className="resource-card" key={pledge.id}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="font-bold text-stone-900 text-sm">{name}</h3>
-                    <p className="mt-1 flex items-center gap-1 text-xs text-stone-500">
+                    <h3 className="font-bold text-slate-900 text-sm">{name}</h3>
+                    <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
                       <MapPin size={13} /> {location}
                     </p>
                   </div>
                   <Badge tone={pledge.status === "resolved" ? "green" : "amber"}>
-                    {pledge.status === "resolved" ? "Allocated" : "Awaiting Dispatch"}
+                    {pledge.status === "resolved" ? "Allocated" : "Pending"}
                   </Badge>
                 </div>
 
-                <div className="mt-4 grid gap-2 text-xs text-stone-600 sm:grid-cols-2">
+                <div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
                   <span>
-                    <b className="block text-stone-900 capitalize">{item}</b>
-                    Pledged Asset
+                    <b className="block text-slate-900 capitalize">{item}</b>
+                    Asset
                   </span>
                   <span>
-                    <b className="block text-stone-900">{availability}</b>
-                    Availability
+                    <b className="block text-slate-900">{availability}</b>
+                    Available
                   </span>
-                  <span className="flex items-center gap-1 font-mono text-[11px] text-stone-500 col-span-full mt-1">
+                  <span className="flex items-center gap-1 font-mono text-[11px] text-slate-500 col-span-full mt-1">
                     <Phone size={12} /> {contact}
                   </span>
                 </div>

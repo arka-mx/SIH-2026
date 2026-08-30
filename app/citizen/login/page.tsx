@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useState, useEffect } from "react";
+import { FormEvent, useState } from "react";
 import { ArrowRight, UsersRound } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { PublicHeader } from "@/components/public/PublicHeader";
+import { BackButton } from "@/components/public/BackButton";
+import { useLanguage } from "@/lib/language";
 
 const TRANSLATIONS = {
   English: {
@@ -62,47 +63,21 @@ type SupportedLang = "English" | "Hindi" | "Bengali" | "Odia" | "Telugu";
 
 export default function CitizenLoginPage() {
   const router = useRouter();
-  const [lang, setLang] = useState<SupportedLang>("English");
+  const { name: lang } = useLanguage();
   const [name, setName] = useState(process.env.NEXT_PUBLIC_DEFAULT_CITIZEN_NAME || "Rajesh Kumar");
   const [location, setLocation] = useState(process.env.NEXT_PUBLIC_DEFAULT_CITIZEN_LOCATION || "Mumbai Coastal District");
 
-  useEffect(() => {
-    const stored = localStorage.getItem("momentum_language");
-    if (stored === "Hindi" || stored === "hi") {
-      setLang("Hindi");
-    } else if (stored === "Bengali" || stored === "bn") {
-      setLang("Bengali");
-    } else if (stored === "Odia" || stored === "or") {
-      setLang("Odia");
-    } else if (stored === "Telugu" || stored === "te") {
-      setLang("Telugu");
-    } else {
-      setLang("English");
-    }
-  }, []);
-
-  const t = TRANSLATIONS[lang] || TRANSLATIONS.English;
+  const t = TRANSLATIONS[lang as SupportedLang] || TRANSLATIONS.English;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     router.push("/citizen");
   }
 
-  function handleLanguageChange(selected: string) {
-    const value = selected as SupportedLang;
-    setLang(value);
-    localStorage.setItem("sih_language", value);
-  }
-
   return (
-    <main className="public-home">
-      <PublicHeader />
+    <main className="public-home theme-light">
+      <BackButton />
       <section className="access-form-layout">
-        <div>
-          <p className="hero-kicker">{t.kicker}</p>
-          <h1>{t.heading}</h1>
-          <p>{t.subheading}</p>
-        </div>
         <form className="access-form" onSubmit={handleSubmit}>
           <div className="form-icon citizen-icon">
             <UsersRound size={24} />
@@ -133,23 +108,6 @@ export default function CitizenLoginPage() {
               placeholder="City, district or village"
               className="mt-1"
             />
-          </label>
-
-          <label htmlFor="citizen-language">
-            {t.language}
-            <select 
-              id="citizen-language" 
-              name="language" 
-              value={lang} 
-              onChange={(e) => handleLanguageChange(e.target.value)}
-              className="mt-1"
-            >
-              <option value="English">English</option>
-              <option value="Hindi">हिन्दी</option>
-              <option value="Bengali">বাংলা</option>
-              <option value="Odia">ଓଡ଼ିଆ</option>
-              <option value="Telugu">తెలుగు</option>
-            </select>
           </label>
 
           <button className="form-submit citizen-submit" type="submit">

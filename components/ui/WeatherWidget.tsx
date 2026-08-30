@@ -91,9 +91,9 @@ export function WeatherWidget({ lat, lng }: WeatherWidgetProps) {
 
   if (loading && !weather) {
     return (
-      <div className="flex items-center gap-1.5 text-[11px] font-bold text-stone-500 bg-white/40 border border-stone-200/50 px-2.5 py-1 rounded-xl">
-        <span className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-pulse" />
-        Loading...
+      <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 bg-white border border-slate-300 px-2.5 py-1">
+        <span className="w-1.5 h-1.5 bg-slate-400" />
+        Loading…
       </div>
     );
   }
@@ -104,7 +104,7 @@ export function WeatherWidget({ lat, lng }: WeatherWidgetProps) {
     <div className="relative">
       <div 
         onClick={() => setShowPopover(!showPopover)}
-        className="flex items-center gap-2.5 text-[11px] font-bold text-stone-700 bg-[#fffdf6] border border-[#eadaab] px-3 py-1.5 rounded-xl shadow-3xs cursor-pointer hover:bg-[#fffae9] transition-all select-none"
+        className="flex items-center gap-2.5 text-[11px] font-bold text-slate-700 bg-white border border-slate-300 px-3 py-1.5 cursor-pointer hover:bg-slate-50 transition-all select-none"
         title={`Click to inspect or change monitoring coordinate (${activeLat.toFixed(4)}, ${activeLng.toFixed(4)})`}
       >
         <span className="flex items-center gap-1">
@@ -142,8 +142,8 @@ export function WeatherWidget({ lat, lng }: WeatherWidgetProps) {
               <MapPin size={12} className="text-rose-500" /> 
               Monitoring: <strong>({activeLat.toFixed(4)}, {activeLng.toFixed(4)})</strong>
             </p>
-            <p className="bg-stone-50 p-2 rounded-lg border border-stone-200 text-[10px]">
-              📝 <i>MongoDB Caching Policy:</i> Fetches from Open-Meteo. Reuses cache within 2km updated in the last 30 mins to avoid API hit locks.
+            <p className="bg-slate-50 p-2 border border-slate-200 text-[10px]">
+              <i>Caching policy:</i> fetches from Open-Meteo and reuses any reading within 2&nbsp;km taken in the last 30 minutes.
             </p>
           </div>
 
