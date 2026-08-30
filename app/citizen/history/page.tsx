@@ -1,30 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { 
-  Clock3, 
-  CheckCircle, 
-  MapPin, 
-  Radio, 
-  ShieldCheck, 
-  RotateCw, 
+import {
+  Clock3,
+  CheckCircle,
+  MapPin,
+  Radio,
+  RotateCw,
   ArrowRight,
   Flame,
   Waves,
   Wind,
   Mountain,
   HeartPulse,
-  Sparkles,
-  Share2
+  Share2,
 } from "lucide-react";
 import Link from "next/link";
 import { CitizenShell } from "@/components/citizen/CitizenShell";
 import { 
   apiGetCitizenReports, 
   apiGetAllResources, 
-  apiGetRescuerLocations, 
-  ReportItem, 
-  ResourceItem 
+  apiGetRescuerLocations,
+  apiPublishSafeShare,
+  ReportItem,
+  ResourceItem
 } from "@/lib/api";
 import { RescuerUnitProfile } from "@/types/rescuer";
 import { getOrCreateSessionId } from "@/lib/session";
@@ -33,7 +32,7 @@ import dynamic from "next/dynamic";
 
 const CitizenTrackingMap = dynamic(
   () => import("@/components/citizen/CitizenTrackingMap").then((mod) => mod.CitizenTrackingMap),
-  { ssr: false, loading: () => <div className="h-[180px] bg-stone-50 border rounded-lg animate-pulse flex items-center justify-center text-xs text-stone-400">Loading live tracking map...</div> }
+  { ssr: false, loading: () => <div className="h-[180px] bg-slate-50 border border-slate-200 flex items-center justify-center text-xs text-slate-400">Loading map…</div> }
 );
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -78,9 +77,32 @@ export default function CitizenHistoryPage() {
     }
   }
 
-  function handleShare(reportId: string) {
+  async function handleShare(report: ReportItem) {
+    // Publish a public snapshot first so the link resolves even if the backend is offline.
+    const snapshot = await apiPublishSafeShare(report);
+    const reportId = snapshot.id;
     const shareUrl = `${window.location.origin}/safe/${reportId}`;
-    navigator.clipboard.writeText(shareUrl);
+    const shareData = {
+      title: "My safety status — Momentum",
+      text: "I've shared my location and safety status. You can follow it live here:",
+      url: shareUrl,
+    };
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch (err) {
+      // user dismissed the share sheet — don't fall back to copying
+      if (err instanceof Error && err.name === "AbortError") return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch {
+      // clipboard blocked — still surface feedback so the user can copy from the address bar
+    }
     setCopiedId(reportId);
     setTimeout(() => setCopiedId(null), 2500);
   }
@@ -155,39 +177,23 @@ export default function CitizenHistoryPage() {
   function getStatusBadge(status: string) {
     switch (status) {
       case "unverified":
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-            Unverified (Gathering Reports)
-          </span>
-        );
+        return <span className="adm-status adm-status--amber">Awaiting reports</span>;
       case "verified":
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
-            <Sparkles size={12} className="text-emerald-600" />
-            Verified (3+ Reports Confirmed)
-          </span>
-        );
+        return <span className="adm-status adm-status--blue">Verified</span>;
       case "in_progress":
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-300">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping" />
-            In Progress (Rescue Dispatched)
+          <span className="adm-status adm-status--blue">
+            <CheckCircle size={11} /> Dispatched
           </span>
         );
       case "resolved":
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-700 text-white shadow-xs">
-            <CheckCircle size={13} />
-            Resolved & Safe
+          <span className="adm-status adm-status--green">
+            <CheckCircle size={11} /> Resolved
           </span>
         );
       default:
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 text-stone-800">
-            {status}
-          </span>
-        );
+        return <span className="adm-status adm-status--mute">{status}</span>;
     }
   }
 
@@ -195,40 +201,35 @@ export default function CitizenHistoryPage() {
     <CitizenShell>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Closed-Loop Status Tracking</p>
-          <h1>Your Active Reports</h1>
+          <p className="eyebrow">Report tracking</p>
+          <h1>Status</h1>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => loadReports(sessionId)}
-            className="flex items-center gap-1 text-xs bg-white border border-stone-200 hover:border-emerald-500 px-3 py-1.5 rounded-lg shadow-2xs transition-all"
-          >
+          <button onClick={() => loadReports(sessionId)} className="adm-btn">
             <RotateCw size={13} /> Refresh
           </button>
-          <span className="login-note flex items-center gap-1">
-            <ShieldCheck size={14} className="text-emerald-600" /> Session: {sessionId.slice(0, 10)}...
-          </span>
+          <span className="login-note">Session {sessionId.slice(0, 10)}…</span>
         </div>
       </div>
 
       {liveEvent && (
-        <div className="mb-4 p-3 bg-emerald-600 text-white rounded-lg shadow-sm text-xs font-medium flex items-center justify-between animate-fadeIn">
-          <span>⚡ Live Update: {liveEvent}</span>
-          <button onClick={() => setLiveEvent(null)} className="text-white/80 hover:text-white font-bold ml-2">✕</button>
+        <div className="adm-note" style={{ borderLeftColor: "var(--c-green)", marginBottom: 16, justifyContent: "space-between", alignItems: "center" }}>
+          <span>{liveEvent}</span>
+          <button onClick={() => setLiveEvent(null)} className="adm-btn" style={{ padding: "4px 8px" }}>Dismiss</button>
         </div>
       )}
 
       {loading ? (
-        <div className="p-8 text-center text-sm text-stone-500 bg-white rounded-xl border border-stone-200">
-          Loading your incident history...
+        <div className="adm-card" style={{ textAlign: "center", color: "var(--c-ink-mute)", fontSize: 13 }}>
+          Loading…
         </div>
       ) : reports.length === 0 ? (
-        <div className="empty-state clay-panel">
-          <Clock3 size={28} />
-          <h2>No reports filed under this session yet</h2>
-          <p>When you file an emergency report or pledge resources, you can track real-time dispatch progress right here.</p>
-          <Link href="/citizen" className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-sm">
-            File an Emergency Report <ArrowRight size={14} />
+        <div className="empty-state adm-card">
+          <Clock3 size={26} />
+          <h2>No reports yet</h2>
+          <p>File an emergency report or pledge a resource to track dispatch progress here.</p>
+          <Link href="/citizen" className="adm-btn adm-btn--primary" style={{ marginTop: 12 }}>
+            Report an emergency <ArrowRight size={14} />
           </Link>
         </div>
       ) : (
@@ -286,30 +287,36 @@ export default function CitizenHistoryPage() {
             }
 
             return (
-              <div 
-                key={report.id} 
-                className={`p-5 rounded-xl border transition-all ${
-                  report.status === "resolved" 
-                    ? "bg-green-50/70 border-green-300" 
-                    : report.status === "in_progress"
-                    ? "bg-blue-50/70 border-blue-300 shadow-sm"
-                    : report.status === "verified"
-                    ? "bg-emerald-50/70 border-emerald-300"
-                    : "bg-white border-stone-200 shadow-2xs"
-                }`}
+              <div
+                key={report.id}
+                className="adm-card"
+                style={{
+                  borderLeftWidth: 3,
+                  borderLeftColor:
+                    report.status === "resolved"
+                      ? "var(--c-green)"
+                      : report.status === "in_progress"
+                      ? "var(--c-blue)"
+                      : report.status === "verified"
+                      ? "var(--c-blue)"
+                      : "var(--c-amber)",
+                }}
               >
                 <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-lg bg-white border border-stone-200 shadow-2xs">
+                  <div className="flex items-center gap-2.5">
+                    <span className="border border-slate-200 p-1.5 text-slate-600">
                       {getDisasterIcon(report.type)}
-                    </div>
+                    </span>
                     <div>
-                      <h3 className="font-bold text-sm text-stone-900 capitalize flex items-center gap-2">
-                        {report.type} Incident
-                        <span className="font-mono text-[11px] font-normal text-stone-500">#{report.id.slice(0, 8)}</span>
+                      <h3 className="section-title capitalize flex items-center gap-2">
+                        {report.type}
+                        <span className="font-mono text-[11px] font-normal text-slate-400">
+                          #{report.id.slice(0, 8)}
+                        </span>
                       </h3>
-                      <p className="text-xs text-stone-500 flex items-center gap-1">
-                        <MapPin size={12} /> {report.location_wkt || "GPS Location"} · Filed on {new Date(report.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                        <MapPin size={12} /> {report.location_wkt || "GPS location"} ·{" "}
+                        {new Date(report.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </p>
                     </div>
                   </div>
@@ -317,36 +324,35 @@ export default function CitizenHistoryPage() {
                 </div>
 
                 {report.description && (
-                  <div className="mt-3 text-xs text-stone-700 bg-white/70 p-3 rounded-lg border border-stone-200">
+                  <div className="mt-3 text-xs text-slate-700 bg-slate-50 p-3 border border-slate-200">
                     {report.description}
                   </div>
                 )}
 
-                {/* Closest Shelter & Rescuer ETA panels */}
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
                   {nearestShelterItem && (
-                    <div className="p-2.5 bg-emerald-50/60 border border-emerald-200 rounded-lg flex items-center justify-between shadow-3xs">
-                      <span className="text-stone-600 font-semibold">📍 Nearest Camp:</span>
-                      <span className="font-bold text-stone-800">{nearestShelterItem.name} ({nearestShelterDist.toFixed(1)} km)</span>
+                    <div className="adm-kv">
+                      <span>Nearest shelter</span>
+                      <strong>
+                        {nearestShelterItem.name} · {nearestShelterDist.toFixed(1)} km
+                      </strong>
                     </div>
                   )}
                   {dispatchETA && (
-                    <div className="p-2.5 bg-blue-50/60 border border-blue-200 rounded-lg flex flex-col gap-1 shadow-3xs">
+                    <div className="adm-kv" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
                       <div className="flex items-center justify-between">
-                        <span className="text-stone-600 font-semibold">🚒 Dispatched:</span>
-                        <span className="font-bold text-stone-800">{dispatchETA.callsign} ({dispatchETA.distance.toFixed(1)} km)</span>
+                        <span>Dispatched</span>
+                        <strong>
+                          {dispatchETA.callsign} · {dispatchETA.distance.toFixed(1)} km
+                        </strong>
                       </div>
-                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-blue-200/50">
-                        <span className="text-stone-500 font-medium">Estimated Arrival:</span>
-                        <span className="font-extrabold text-blue-700">~{dispatchETA.eta} mins</span>
+                      <div className="flex items-center justify-between">
+                        <span>ETA</span>
+                        <strong>~{dispatchETA.eta} min</strong>
                       </div>
-                      <div className="text-[10px] text-right font-semibold mt-0.5">
-                        {dispatchETA.gpsActive ? (
-                          <span className="text-emerald-700">📶 GPS Live: Active Tracker (42 km/h)</span>
-                        ) : (
-                          <span className="text-amber-700">⚠️ GPS Lost: Estimating using road avg (32 km/h)</span>
-                        )}
-                      </div>
+                      <span className={`adm-status ${dispatchETA.gpsActive ? "adm-status--green" : "adm-status--amber"}`} style={{ alignSelf: "flex-start" }}>
+                        {dispatchETA.gpsActive ? "GPS live" : "GPS lost · road avg"}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -367,32 +373,24 @@ export default function CitizenHistoryPage() {
                   />
                 )}
 
-              {/* Action Toolbar */}
               <div className="mt-3 flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => handleShare(report.id)}
-                  className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <Share2 size={12} /> 
-                  {copiedId === report.id ? "✓ Copied Link!" : "Share \"I'm Safe\" Link"}
+                <button type="button" onClick={() => handleShare(report)} className="adm-btn">
+                  <Share2 size={12} />
+                  {copiedId === report.id ? "Link copied" : "Share “I’m safe” link"}
                 </button>
               </div>
 
-              {/* Step indicator */}
-              <div className="mt-4 pt-3 border-t border-stone-200/80">
-                <div className="flex items-center justify-between text-[11px] font-medium text-stone-500">
-                  <span className="text-emerald-700 font-semibold">1. Report Submitted</span>
-                  <span className={report.status !== "unverified" ? "text-emerald-700 font-semibold" : ""}>
-                    2. Clustered & Verified
+              <div className="cz-steps">
+                  <span className="done">Submitted</span>
+                  <span className={report.status !== "unverified" ? "done" : ""}>
+                    Verified
                   </span>
-                  <span className={report.status === "in_progress" || report.status === "resolved" ? "text-blue-700 font-semibold" : ""}>
-                    3. Rescue Dispatched
+                  <span className={report.status === "in_progress" || report.status === "resolved" ? "active" : ""}>
+                    Dispatched
                   </span>
-                  <span className={report.status === "resolved" ? "text-green-700 font-bold" : ""}>
-                    4. Incident Resolved
+                  <span className={report.status === "resolved" ? "done" : ""}>
+                    Resolved
                   </span>
-                </div>
               </div>
             </div>
             );

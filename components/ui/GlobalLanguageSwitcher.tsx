@@ -16,6 +16,7 @@ export function GlobalLanguageSwitcher() {
 
   const dockedInHeader =
     pathname === "/citizen" ||
+    (pathname.startsWith("/citizen/") && pathname !== "/citizen/login") ||
     (pathname.startsWith("/admin/") && pathname !== "/admin/login") ||
     pathname === "/admin" ||
     (pathname.startsWith("/rescuer/") && pathname !== "/rescuer/login");
