@@ -49,7 +49,7 @@ const TRANSLATIONS = {
   },
   Odia: {
     heroKicker: "ସାମୁଦାୟିକ ପ୍ରତିକ୍ରିୟା ନେଟୱର୍କ",
-    title: "비ପର୍ଯ୍ୟୟ ପ୍ରଶମନ କମାଣ୍ଡ ସେଣ୍ଟର",
+    title: "ବିପର୍ଯ୍ୟୟ ପ୍ରତିକ୍ରିୟା କମାଣ୍ଡ ସେଣ୍ଟର",
     subtitle: "ଜରୁରୀକାଳୀନ ପରିସ୍ଥିତି ରିପୋର୍ଟ କରନ୍ତୁ, ଉଦ୍ଧାରକାରୀ ଦଳ ଏବଂ ସାମଗ୍ରୀ ସମନ୍ୱୟ କରନ୍ତୁ ଏବଂ ପ୍ରତିଟି ମୂହୁର୍ତ୍ତ ମୂଲ୍ୟବାନ ଥିବାବେଳେ ଜିଲ୍ଲାକୁ ସଂଯୋଗ କରନ୍ତୁ।",
     languageLabel: "ପସନ୍ଦର ଭାଷା",
     eyebrow: "ଆପଣଙ୍କର କାର୍ଯ୍ୟକ୍ଷେତ୍ର ବାଛନ୍ତୁ",
@@ -79,41 +79,45 @@ const TRANSLATIONS = {
 
 type SupportedLang = "English" | "Hindi" | "Bengali" | "Odia" | "Telugu";
 
+const STORAGE_KEY = "momentum_language";
+
+const LEGACY_CODE_MAP: Record<string, SupportedLang> = {
+  en: "English",
+  hi: "Hindi",
+  bn: "Bengali",
+  or: "Odia",
+  te: "Telugu",
+};
+
+function normalizeLang(value: string | null): SupportedLang | null {
+  if (!value) return null;
+  if (value in TRANSLATIONS) return value as SupportedLang;
+  return LEGACY_CODE_MAP[value] ?? null;
+}
+
 export default function Home() {
   const [lang, setLang] = useState<SupportedLang>("English");
 
+  // Load the stored preference once, after mount (avoids SSR/hydration mismatch).
   useEffect(() => {
-    const stored = localStorage.getItem("momentum_language");
-    if (stored === "Hindi" || stored === "hi") {
-      setLang("Hindi");
-    } else if (stored === "Bengali" || stored === "bn") {
-      setLang("Bengali");
-    } else if (stored === "Odia" || stored === "or") {
-      setLang("Odia");
-    } else if (stored === "Telugu" || stored === "te") {
-      setLang("Telugu");
-    } else {
-      setLang("English");
-    }
-
-    // Dynamic language cycling animation (every 4 seconds) if no custom selection was stored
-    if (!stored) {
-      const languages: SupportedLang[] = ["English", "Hindi", "Bengali", "Odia", "Telugu"];
-      let idx = 0;
-      const interval = setInterval(() => {
-        idx = (idx + 1) % languages.length;
-        setLang(languages[idx]);
-      }, 4000);
-      return () => clearInterval(interval);
+    try {
+      const stored = normalizeLang(localStorage.getItem(STORAGE_KEY));
+      if (stored) setLang(stored);
+    } catch {
+      /* localStorage unavailable — keep default */
     }
   }, []);
 
-  const t = TRANSLATIONS[lang] || TRANSLATIONS.English;
+  const t = TRANSLATIONS[lang] ?? TRANSLATIONS.English;
 
   function handleLanguageChange(selected: string) {
-    const value = selected as SupportedLang;
+    const value = normalizeLang(selected) ?? "English";
     setLang(value);
-    localStorage.setItem("momentum_language", value);
+    try {
+      localStorage.setItem(STORAGE_KEY, value);
+    } catch {
+      /* ignore persistence failure */
+    }
   }
 
   return (
