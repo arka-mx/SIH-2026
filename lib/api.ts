@@ -5,6 +5,10 @@ import {
   RadicalRegionRule,
   RescuerUnitProfile,
   HeadResourceEstimation,
+  DistrictHeadDirective,
+  ResourceRequirementItem,
+  MemberOrderAllocation,
+  TeamMember,
 } from "@/types/rescuer";
 
 export type {
@@ -13,6 +17,10 @@ export type {
   PredeterminedPermissionSettings,
   RadicalRegionRule,
   HeadResourceEstimation,
+  DistrictHeadDirective,
+  ResourceRequirementItem,
+  MemberOrderAllocation,
+  TeamMember,
 } from "@/types/rescuer";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : "";
@@ -68,7 +76,80 @@ export interface AllocationItem {
 }
 
 // Fallback seed resources in case backend is offline
-const FALLBACK_RESOURCES: ResourceItem[] = [];
+let FALLBACK_RESOURCES: ResourceItem[] = [
+  {
+    id: "res-food-central",
+    name: "District Central Food Ration Stock",
+    type: "food_stock",
+    capacity_total: 1000,
+    capacity_used: 180,
+    status: "available",
+    disaster_types: ["flood", "cyclone", "fire", "landslide"],
+    lat: 19.318,
+    lng: 84.795,
+    location_wkt: "POINT(84.795 19.318)",
+  },
+  {
+    id: "res-water-reserve",
+    name: "Regional Potable Drinking Water Depot",
+    type: "food_stock",
+    capacity_total: 4500,
+    capacity_used: 850,
+    status: "available",
+    disaster_types: ["flood", "cyclone", "fire", "medical"],
+    lat: 19.312,
+    lng: 84.791,
+    location_wkt: "POINT(84.791 19.312)",
+  },
+  {
+    id: "res-med-depot",
+    name: "District Hospital Emergency Medical Packs",
+    type: "medical_van",
+    capacity_total: 300,
+    capacity_used: 42,
+    status: "available",
+    disaster_types: ["medical", "flood", "cyclone", "fire"],
+    lat: 19.325,
+    lng: 84.802,
+    location_wkt: "POINT(84.802 19.325)",
+  },
+  {
+    id: "res-gear-vests",
+    name: "Civil Defense Life Jackets & Inflatable Boats Hub",
+    type: "boat",
+    capacity_total: 250,
+    capacity_used: 55,
+    status: "available",
+    disaster_types: ["flood", "cyclone"],
+    lat: 19.308,
+    lng: 84.788,
+    location_wkt: "POINT(84.788 19.308)",
+  },
+  {
+    id: "res-shelter-main",
+    name: "Government Community Disaster Shelter Camp",
+    type: "shelter",
+    capacity_total: 600,
+    capacity_used: 190,
+    status: "available",
+    disaster_types: ["flood", "cyclone", "fire"],
+    lat: 19.330,
+    lng: 84.810,
+    location_wkt: "POINT(84.810 19.330)",
+  },
+  {
+    id: "res-fuel-depot",
+    name: "Emergency Operations Diesel & Fuel Stock",
+    type: "rescue_team",
+    capacity_total: 1500,
+    capacity_used: 320,
+    status: "available",
+    disaster_types: ["flood", "cyclone", "fire"],
+    lat: 19.305,
+    lng: 84.780,
+    location_wkt: "POINT(84.780 19.305)",
+  },
+];
 
 let inMemoryIncidents: ReportItem[] = [];
 
@@ -835,6 +916,326 @@ export async function apiUpdateVolunteerPledgeStatus(
   const updated = inMemoryVolunteerPledges.find((v) => v.id === pledgeId);
   if (!updated) throw new Error("Volunteer pledge not found");
   return updated;
+}
+
+// ── District Head Connection (Admin Head Directives & Communications) ──
+
+let inMemoryDistrictDirectives: DistrictHeadDirective[] = [
+  {
+    id: "DIR-ADM-001",
+    adminName: "District Emergency Management Authority (District Head)",
+    headUnitId: "demo-team-alpha",
+    title: "Priority Flood Response & Immediate Shelter Supply Mobilization",
+    message: "Water levels at Brahmapur River Basin have breached yellow alert mark. As Rescue Team Head, ensure your field squads are allocated 150 ration packs and 500L clean water immediately. Coordinate directly with your field team leaders.",
+    type: "priority_dispatch",
+    priority: "critical",
+    issuedAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+    acknowledged: false,
+    attachedResourceTarget: {
+      type: "Food & Water Rations",
+      amount: 150,
+      unit: "Ration Kits",
+    },
+  },
+  {
+    id: "DIR-ADM-002",
+    adminName: "Collectorate Disaster Command",
+    headUnitId: "demo-team-alpha",
+    title: "Weather Advisory: Cyclone Surge Wind Speed 75km/h",
+    message: "IMD predicts localized gusty winds in Coastal Sectors 3 & 4. Secure all inflatable boat units and distribute life vests to all frontline rescuers before scene arrival.",
+    type: "notification",
+    priority: "high",
+    issuedAt: new Date(Date.now() - 75 * 60 * 1000).toISOString(),
+    acknowledged: true,
+    acknowledgedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    acknowledgmentNote: "Team Alpha standing by. Life jackets checked and ready.",
+  },
+  {
+    id: "DIR-ADM-003",
+    adminName: "District Medical Officer (Admin Head)",
+    headUnitId: "demo-team-alpha",
+    title: "Triage & Medical Kit Replenishment Directive",
+    message: "First aid and IV fluid supplies at District Depot are unlocked for immediate requisition. Instruct your team members to log gathered quantities as they retrieve kits.",
+    type: "order",
+    priority: "normal",
+    issuedAt: new Date(Date.now() - 140 * 60 * 1000).toISOString(),
+    acknowledged: true,
+    acknowledgedAt: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
+    acknowledgmentNote: "Understood. Requisitioned 20 triage packs.",
+  },
+];
+
+export async function apiGetDistrictHeadDirectives(headUnitId?: string): Promise<DistrictHeadDirective[]> {
+  return inMemoryDistrictDirectives;
+}
+
+export async function apiAcknowledgeDistrictHeadDirective(
+  directiveId: string,
+  note?: string
+): Promise<DistrictHeadDirective> {
+  inMemoryDistrictDirectives = inMemoryDistrictDirectives.map((d) =>
+    d.id === directiveId
+      ? {
+          ...d,
+          acknowledged: true,
+          acknowledgedAt: new Date().toISOString(),
+          acknowledgmentNote: note || "Acknowledged and operational plan activated by Rescue Team Head.",
+        }
+      : d
+  );
+  const updated = inMemoryDistrictDirectives.find((d) => d.id === directiveId);
+  if (!updated) throw new Error("Directive not found");
+  return updated;
+}
+
+export async function apiSendDistrictHeadDirective(
+  directive: Partial<DistrictHeadDirective>
+): Promise<DistrictHeadDirective> {
+  const newDir: DistrictHeadDirective = {
+    id: "DIR-ADM-" + Math.floor(100 + Math.random() * 900),
+    adminName: directive.adminName || "District Disaster Authority (Admin Head)",
+    headUnitId: directive.headUnitId || "demo-team-alpha",
+    title: directive.title || "Operational Directive",
+    message: directive.message || "",
+    type: directive.type || "order",
+    priority: directive.priority || "high",
+    issuedAt: new Date().toISOString(),
+    acknowledged: false,
+    attachedResourceTarget: directive.attachedResourceTarget,
+  };
+  inMemoryDistrictDirectives.unshift(newDir);
+  return newDir;
+}
+
+// ── Team Members & Head-To-Member Resource Allocations ──
+
+let inMemoryTeamMembers: TeamMember[] = [
+  {
+    id: "mem-01",
+    name: "Officer Ramesh Patnaik",
+    callsign: "SQUAD-LEAD-ALPHA",
+    phone: "+91 94371 88201",
+    role: "Field Squad Leader (Sector 1)",
+    status: "active",
+  },
+  {
+    id: "mem-02",
+    name: "Inspector Priya Sen",
+    callsign: "MED-RESCUER-02",
+    phone: "+91 94371 88202",
+    role: "Paramedic & Field Medical Responder",
+    status: "active",
+  },
+  {
+    id: "mem-03",
+    name: "Sub-Inspector Vikram Rao",
+    callsign: "BOAT-PILOT-03",
+    phone: "+91 94371 88203",
+    role: "Flood Inflatable Boat Operator",
+    status: "standby",
+  },
+  {
+    id: "mem-04",
+    name: "Field Officer Sunita Das",
+    callsign: "LOGISTICS-ALPHA",
+    phone: "+91 94371 88204",
+    role: "Ration & Emergency Supply Officer",
+    status: "active",
+  },
+];
+
+export async function apiGetTeamMembers(teamId?: string): Promise<TeamMember[]> {
+  return inMemoryTeamMembers;
+}
+
+let inMemoryMemberAllocations: MemberOrderAllocation[] = [
+  {
+    id: "ALLOC-MEM-001",
+    teamId: "demo-team-alpha",
+    teamName: "NDRF Team Alpha (Regional Unit)",
+    headName: "Captain Rajesh Verma",
+    headPhone: "+91 98765 11001",
+    headOffice: "Brahmapur Regional Disaster Command",
+    memberId: "mem-01",
+    memberName: "Officer Ramesh Patnaik",
+    memberRole: "Field Squad Leader (Sector 1)",
+    title: "Sector 1 High-Ground Evacuation & Food Distribution",
+    instructions: "Proceed to Coastal Lowlands Block A. Gather assigned dry food kits and drinking water from central stores and distribute to evacuated families at Shelter Camp 1.",
+    status: "gathering",
+    assignedAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    resources: [
+      {
+        key: "foodRationKits",
+        name: "Food Ration Kits",
+        targetAmount: 40,
+        gatheredAmount: 25,
+        unit: "packs",
+        adminResourceName: "District Central Food Ration Stock",
+      },
+      {
+        key: "waterLiters",
+        name: "Drinking Water",
+        targetAmount: 150,
+        gatheredAmount: 100,
+        unit: "liters",
+        adminResourceName: "Regional Potable Drinking Water Depot",
+      },
+      {
+        key: "lifeJackets",
+        name: "Life Vests",
+        targetAmount: 15,
+        gatheredAmount: 15,
+        unit: "vests",
+        adminResourceName: "Civil Defense Life Jackets & Inflatable Boats Hub",
+      },
+    ],
+  },
+  {
+    id: "ALLOC-MEM-002",
+    teamId: "demo-team-alpha",
+    teamName: "NDRF Team Alpha (Regional Unit)",
+    headName: "Captain Rajesh Verma",
+    headPhone: "+91 98765 11001",
+    headOffice: "Brahmapur Regional Disaster Command",
+    memberId: "mem-02",
+    memberName: "Inspector Priya Sen",
+    memberRole: "Paramedic & Field Medical Responder",
+    title: "Emergency Medical Triage & First Aid Mobilization",
+    instructions: "Establish mobile triage station near Sub-District Relief Center. Collect IV fluids and trauma packs from hospital depot and report status upon setup.",
+    status: "gathering",
+    assignedAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    resources: [
+      {
+        key: "medicalKits",
+        name: "Medical & Triage Kits",
+        targetAmount: 12,
+        gatheredAmount: 8,
+        unit: "kits",
+        adminResourceName: "District Hospital Emergency Medical Packs",
+      },
+      {
+        key: "waterLiters",
+        name: "Sterilized Water",
+        targetAmount: 50,
+        gatheredAmount: 30,
+        unit: "liters",
+        adminResourceName: "Regional Potable Drinking Water Depot",
+      },
+    ],
+  },
+];
+
+export async function apiGetMemberAllocations(teamId?: string, memberId?: string): Promise<MemberOrderAllocation[]> {
+  if (memberId) {
+    return inMemoryMemberAllocations.filter((a) => a.memberId === memberId);
+  }
+  return inMemoryMemberAllocations;
+}
+
+export async function apiCreateMemberAllocation(
+  newAlloc: Partial<MemberOrderAllocation>
+): Promise<MemberOrderAllocation> {
+  const item: MemberOrderAllocation = {
+    id: "ALLOC-MEM-" + Math.floor(100 + Math.random() * 900),
+    teamId: newAlloc.teamId || "demo-team-alpha",
+    teamName: newAlloc.teamName || "NDRF Team Alpha",
+    headName: newAlloc.headName || "Captain Rajesh Verma",
+    headPhone: newAlloc.headPhone || "+91 98765 11001",
+    headOffice: newAlloc.headOffice || "Brahmapur Regional Disaster Command",
+    memberId: newAlloc.memberId || "mem-01",
+    memberName: newAlloc.memberName || "Field Rescuer",
+    memberRole: newAlloc.memberRole || "Field Squad Member",
+    title: newAlloc.title || "Field Rescue Directive",
+    instructions: newAlloc.instructions || "Fulfill allocated resource collection and execute deployment.",
+    status: "pending",
+    assignedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    resources: newAlloc.resources || [],
+  };
+
+  inMemoryMemberAllocations.unshift(item);
+  return item;
+}
+
+/**
+ * Live Resource Gathering & Automatic Master/Admin Resource Deduction Engine
+ * When a normal rescue team member updates gathered requirement amounts on the website,
+ * the particular amount automatically increases the member's progress and REDUCES from
+ * the Admin side master resource pool (capacity_used increases or available stock decreases).
+ */
+export async function apiUpdateMemberGatheredAmount(
+  allocationId: string,
+  resourceKey: string,
+  deltaAmount: number
+): Promise<{
+  allocation: MemberOrderAllocation;
+  deductedAdminResource?: ResourceItem;
+  message: string;
+}> {
+  const allocIndex = inMemoryMemberAllocations.findIndex((a) => a.id === allocationId);
+  if (allocIndex === -1) throw new Error("Allocation not found");
+
+  const alloc = inMemoryMemberAllocations[allocIndex];
+  let matchedResourceName = "";
+  let actualDeducted = 0;
+
+  const updatedResources = alloc.resources.map((res) => {
+    if (res.key === resourceKey || res.name.toLowerCase() === resourceKey.toLowerCase()) {
+      matchedResourceName = res.adminResourceName || res.name;
+      const prevAmount = res.gatheredAmount;
+      const nextAmount = Math.max(0, Math.min(res.targetAmount, prevAmount + deltaAmount));
+      actualDeducted = nextAmount - prevAmount;
+      return { ...res, gatheredAmount: nextAmount };
+    }
+    return res;
+  });
+
+  const allCompleted = updatedResources.every((r) => r.gatheredAmount >= r.targetAmount);
+  const updatedStatus = allCompleted ? "completed" : "gathering";
+
+  const updatedAlloc: MemberOrderAllocation = {
+    ...alloc,
+    resources: updatedResources,
+    status: updatedStatus,
+    updatedAt: new Date().toISOString(),
+  };
+
+  inMemoryMemberAllocations[allocIndex] = updatedAlloc;
+
+  // ── AUTOMATIC ADMIN MASTER RESOURCE POOL REDUCTION ──
+  let matchedAdminRes: ResourceItem | undefined;
+  if (actualDeducted > 0) {
+    // Find matching admin resource by name or type
+    const resIdx = FALLBACK_RESOURCES.findIndex(
+      (r) =>
+        r.name.toLowerCase().includes(matchedResourceName.toLowerCase()) ||
+        matchedResourceName.toLowerCase().includes(r.name.toLowerCase()) ||
+        r.type.toLowerCase().includes(resourceKey.toLowerCase()) ||
+        (resourceKey === "foodRationKits" && r.type === "food_stock") ||
+        (resourceKey === "waterLiters" && r.name.toLowerCase().includes("water")) ||
+        (resourceKey === "medicalKits" && (r.type === "medical_van" || r.name.toLowerCase().includes("medical"))) ||
+        (resourceKey === "lifeJackets" && (r.type === "boat" || r.name.toLowerCase().includes("jacket"))) ||
+        (resourceKey === "fuelLiters" && r.name.toLowerCase().includes("fuel"))
+    );
+
+    if (resIdx !== -1) {
+      const targetRes = FALLBACK_RESOURCES[resIdx];
+      const newUsed = Math.min(targetRes.capacity_total, targetRes.capacity_used + actualDeducted);
+      FALLBACK_RESOURCES[resIdx] = {
+        ...targetRes,
+        capacity_used: newUsed,
+      };
+      matchedAdminRes = FALLBACK_RESOURCES[resIdx];
+    }
+  }
+
+  return {
+    allocation: updatedAlloc,
+    deductedAdminResource: matchedAdminRes,
+    message: `Logged +${actualDeducted} units. Automatically deducted from Admin Resource Pool (${matchedAdminRes?.name || matchedResourceName}).`,
+  };
 }
 
 
