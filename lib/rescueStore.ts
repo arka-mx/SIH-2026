@@ -170,7 +170,20 @@ export async function processRescueSubmission(payload: SubmitRescuePayload): Pro
 
     if (activeIncIndex !== -1) {
       // ── STEP 3: Active Incident Exists -> APPEND REPORT EVENT & UPDATE INCIDENT ──
+      // Location remains locked to the FIRST SOS submission for this device to prevent drift
       const existingInc = inMemoryIncidents[activeIncIndex];
+
+      const initialLat =
+        typeof existingInc.latitude === "number" && !isNaN(existingInc.latitude) && existingInc.latitude !== 0
+          ? existingInc.latitude
+          : payload.latitude;
+      const initialLng =
+        typeof existingInc.longitude === "number" && !isNaN(existingInc.longitude) && existingInc.longitude !== 0
+          ? existingInc.longitude
+          : payload.longitude;
+      const initialAddress = existingInc.address || payload.address;
+      const initialLocationWkt =
+        existingInc.location_wkt || `POINT(${initialLng} ${initialLat})`;
 
       const reportEvent: RescueReportEvent = {
         id: "RPT-" + Math.floor(1000 + Math.random() * 9000) + "-" + Date.now().toString(36),
@@ -178,8 +191,8 @@ export async function processRescueSubmission(payload: SubmitRescuePayload): Pro
         device_id: deviceId,
         type: payload.type || existingInc.type,
         message: payload.message || "Updated rescue status",
-        latitude: payload.latitude,
-        longitude: payload.longitude,
+        latitude: initialLat,
+        longitude: initialLng,
         location_accuracy: payload.location_accuracy || 10,
         ip_address: ip,
         user_agent: payload.user_agent,
@@ -196,9 +209,10 @@ export async function processRescueSubmission(payload: SubmitRescuePayload): Pro
         reporter_name: existingInc.reporter_name || payload.reporter_name,
         type: payload.type || existingInc.type,
         description: payload.message ? `${existingInc.description} | ${payload.message}` : existingInc.description,
-        latitude: payload.latitude,
-        longitude: payload.longitude,
-        address: payload.address || existingInc.address,
+        latitude: initialLat,
+        longitude: initialLng,
+        location_wkt: initialLocationWkt,
+        address: initialAddress,
         report_count: updatedReports.length,
         reports: updatedReports,
         confirmations: existingInc.confirmations || [],

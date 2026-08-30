@@ -705,6 +705,24 @@ export async function apiSubmitReport(formData: FormData): Promise<{ report: Rep
   } catch (err) {
     console.warn("Backend API not reachable for submitReport, creating local report:", err);
     const deviceId = (formData.get("device_id") as string) || (formData.get("session_id") as string) || "dev-local-session";
+
+    const existingInc = inMemoryIncidents.find(
+      (i) => (i.device_id === deviceId || i.session_id === deviceId) && i.status !== "resolved" && i.status !== "cancelled"
+    );
+
+    if (existingInc) {
+      existingInc.report_count = (existingInc.report_count || 1) + 1;
+      existingInc.updated_at = new Date().toISOString();
+      const desc = formData.get("description") as string;
+      if (desc) {
+        existingInc.description = existingInc.description ? `${existingInc.description} | ${desc}` : desc;
+      }
+      return { report: existingInc, action: "UPDATED" };
+    }
+
+    const initialLat = parseFloat((formData.get("lat") as string) || "19.076");
+    const initialLng = parseFloat((formData.get("lng") as string) || "72.8777");
+
     const newRep: ReportItem = {
       id: "REP-" + Math.random().toString(36).substring(2, 8).toUpperCase(),
       session_id: deviceId,
@@ -713,9 +731,9 @@ export async function apiSubmitReport(formData: FormData): Promise<{ report: Rep
       description: (formData.get("description") as string) || "",
       status: "unverified",
       created_at: new Date().toISOString(),
-      lat: parseFloat((formData.get("lat") as string) || "19.076"),
-      lng: parseFloat((formData.get("lng") as string) || "72.8777"),
-      location_wkt: `POINT(${(formData.get("lng") as string) || "72.8777"} ${(formData.get("lat") as string) || "19.076"})`,
+      lat: initialLat,
+      lng: initialLng,
+      location_wkt: `POINT(${initialLng} ${initialLat})`,
       address: (formData.get("description") as string)?.split("]")[0]?.replace("[", "") || "Current Location",
       rescuer_status: "pending_admin",
       report_count: 1,

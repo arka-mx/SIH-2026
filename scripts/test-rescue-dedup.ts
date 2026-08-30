@@ -95,11 +95,17 @@ async function runTests() {
   _resetRescueStore();
   console.log("\n▶ TEST 4: Same device sending multiple updates (Help -> Trapped -> Medical)...");
   await processRescueSubmission({ device_id: "dev-single", type: "flood", message: "Help", latitude: 19.076, longitude: 72.877, ip_address: "10.0.0.1" });
-  await processRescueSubmission({ device_id: "dev-single", type: "flood", message: "Smoke entering building", latitude: 19.076, longitude: 72.877, ip_address: "10.0.0.1" });
-  const t4 = await processRescueSubmission({ device_id: "dev-single", type: "medical", message: "One person injured", latitude: 19.076, longitude: 72.877, ip_address: "10.0.0.1" });
+  await processRescueSubmission({ device_id: "dev-single", type: "flood", message: "Smoke entering building", latitude: 19.078, longitude: 72.879, ip_address: "10.0.0.1" });
+  const t4 = await processRescueSubmission({ device_id: "dev-single", type: "medical", message: "One person injured", latitude: 19.082, longitude: 72.885, ip_address: "10.0.0.1" });
 
-  if (getAllRescueIncidents().length === 1 && t4.incident.report_count === 3 && t4.incident.reports.length === 3) {
-    console.log("  ✅ TEST 4 PASSED: 1 active incident containing 3 events timeline");
+  if (
+    getAllRescueIncidents().length === 1 &&
+    t4.incident.report_count === 3 &&
+    t4.incident.reports.length === 3 &&
+    t4.incident.latitude === 19.076 &&
+    t4.incident.longitude === 72.877
+  ) {
+    console.log("  ✅ TEST 4 PASSED: 1 active incident containing 3 events timeline & first location locked (19.076, 72.877)");
     passed++;
   } else {
     console.error("  ❌ TEST 4 FAILED:", t4);
