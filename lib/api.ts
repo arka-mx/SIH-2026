@@ -11,6 +11,9 @@ import {
   TeamMember,
 } from "@/types/rescuer";
 
+import type { VerificationResult } from "@/lib/reportVerification";
+export type { VerificationResult, VerificationTier } from "@/lib/reportVerification";
+
 export type {
   ResponseTeamRequest,
   CitizenResponse,
@@ -23,8 +26,20 @@ export type {
   TeamMember,
 } from "@/types/rescuer";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : "";
+// Every `/api/*` path below is a route handler served by THIS Next app, so calls
+// must be same-origin (relative). Honouring NEXT_PUBLIC_API_URL here pointed the
+// browser at a separate backend (e.g. :4000) that has none of these routes —
+// silently breaking every citizen SOS, the "share I'm safe" link, report
+// persistence, etc. Keep this empty; the socket layer has its own URL env.
+const API_BASE_URL = "";
 const AUTH_TOKEN = "demo-authority-token";
+
+/**
+ * Route id of the bundled reference unit. Seed/demo data (rosters, directives,
+ * allocations, unit profiles) is scoped to this id only — a live unit signing in
+ * with its own callsign starts from empty state.
+ */
+export const DEMO_UNIT_ID = process.env.NEXT_PUBLIC_DEFAULT_RESCUER_ID || "demo-team-alpha";
 
 export interface ReportItem {
   id: string;
@@ -45,11 +60,62 @@ export interface ReportItem {
   rescuer_status?: "pending_admin" | "assigned" | "admin_denied_auto_routed" | "arrived";
   address?: string;
   region?: string;
+  reporter_name?: string;
   denied_by_admin?: boolean;
   assignment_source?: "admin_dispatch" | "nearest_fallback_admin_denied";
   reports?: any[];
   report_count?: number;
   action?: "CREATED" | "UPDATED" | "IDEMPOTENT_DUPLICATE";
+  verification?: VerificationResult;
+  confirmations?: ReportConfirmationItem[];
+  has_photo?: boolean;
+  severity?: "critical" | "high" | "moderate" | "low";
+  /** Auto-allocation best-match while verified and not yet dispatched. */
+  recommended_allocation?: RecommendedAllocation | null;
+}
+
+export interface RecommendedAllocation {
+  resource_id: string;
+  resource_name: string;
+  resource_type: string;
+  distance_km: number;
+  eta_min: number;
+  demand: number;
+  allocated: number;
+  fully_covered: boolean;
+  reason: string;
+  score: number;
+}
+
+export interface AllocationLine {
+  id: string;
+  report_id: string;
+  resource_id: string;
+  resource_name: string;
+  resource_type: string;
+  status: "recommended" | "en_route" | "at_scene" | "resolved" | "superseded";
+  demand: number;
+  allocated: number;
+  fully_covered: boolean;
+  distance_km: number;
+  eta_min: number;
+  reason: string;
+  incident_type: string;
+  incident_lat: number;
+  incident_lng: number;
+  resource_lat: number;
+  resource_lng: number;
+  recommended_at: string;
+  confirmed_at?: string;
+}
+
+export interface ReportConfirmationItem {
+  id: string;
+  by: "citizen" | "responder" | "authority" | "admin";
+  actor_id?: string;
+  actor_name?: string;
+  note?: string;
+  created_at: string;
 }
 
 export interface ResourceItem {
@@ -64,6 +130,13 @@ export interface ResourceItem {
   lat?: number;
   lng?: number;
   location_wkt?: string;
+  /** Populated by the shortlist endpoint (allocation engine output). */
+  eta_min?: number;
+  match_score?: number;
+  match_reason?: string;
+  capacity_fit?: "full" | "partial" | "none";
+  reachable?: boolean;
+  recommended?: boolean;
 }
 
 export interface AllocationItem {
@@ -412,16 +485,151 @@ export type { SafeStatusView } from "@/lib/safeShare";
  */
 export async function apiPublishSafeShare(report: ReportLike): Promise<SafeStatusView> {
   const snapshot = buildSafeSnapshot(report);
-  try {
-    await fetch(`${API_BASE_URL}/api/safe/${encodeURIComponent(snapshot.id)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(snapshot),
-    });
-  } catch (err) {
-    console.warn("apiPublishSafeShare: could not reach server, link may be local-only:", err);
+  const res = await fetch(`${API_BASE_URL}/api/safe/${encodeURIComponent(snapshot.id)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(snapshot),
+  });
+  if (!res.ok) {
+    // Don't hand back a link that will 404 — let the caller surface the failure.
+    const detail = await res.text().catch(() => "");
+    throw new Error(
+      `Could not publish safe check-in (${res.status})${detail ? `: ${detail}` : ""}`
+    );
   }
   return snapshot;
+}
+
+// ── Emergency Alert System ──
+
+export type AlertAudience = "citizens" | "responders" | "authorities";
+export type AlertCategory =
+  | "disaster_verified"
+  | "evacuation"
+  | "resource_deployment"
+  | "shelter_allocation"
+  | "custom";
+
+export interface EmergencyAlertItem {
+  id: string;
+  category: AlertCategory;
+  alert_type: string;
+  severity: "critical" | "high" | "moderate" | "low";
+  headline: string;
+  body: string;
+  location_name?: string;
+  shelter?: string;
+  instructions?: string;
+  audiences: AlertAudience[];
+  incident_id?: string;
+  sms: { provider: string; configured: boolean; attempted: number; sent: number; failed: number; simulated: number };
+  read_by: string[];
+  created_at: string;
+}
+
+export interface BroadcastEmergencyAlertInput {
+  category: AlertCategory;
+  alert_type: string;
+  severity?: "critical" | "high" | "moderate" | "low";
+  audiences: AlertAudience[];
+  location_name?: string;
+  lat?: number;
+  lng?: number;
+  shelter?: string;
+  instructions?: string;
+  incident_id?: string;
+  extra_phones?: string[];
+}
+
+/**
+ * Trigger an emergency alert. The backend composes the concise SMS (type ·
+ * location · severity · shelter/instructions), sends it through the configured
+ * provider (Twilio / MSG91 — credentials stay server-side), and records the same
+ * alert as an in-app notification. Best-effort: never throws.
+ */
+export async function apiBroadcastEmergencyAlert(
+  input: BroadcastEmergencyAlertInput
+): Promise<EmergencyAlertItem | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/alerts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-authority-token": AUTH_TOKEN },
+      body: JSON.stringify(input),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return (data.alert as EmergencyAlertItem) ?? null;
+    }
+  } catch (err) {
+    console.warn("apiBroadcastEmergencyAlert failed:", err);
+  }
+  return null;
+}
+
+export async function apiGetEmergencyAlerts(opts?: {
+  audience?: AlertAudience;
+  deviceId?: string;
+  since?: string;
+  limit?: number;
+}): Promise<EmergencyAlertItem[]> {
+  try {
+    const qs = new URLSearchParams();
+    if (opts?.audience) qs.set("audience", opts.audience);
+    if (opts?.deviceId) qs.set("device_id", opts.deviceId);
+    if (opts?.since) qs.set("since", opts.since);
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    const res = await fetch(`${API_BASE_URL}/api/alerts?${qs.toString()}`, { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      return Array.isArray(data.alerts) ? data.alerts : [];
+    }
+  } catch {
+    // offline
+  }
+  return [];
+}
+
+export async function apiMarkEmergencyAlertRead(alertId: string, readerKey: string): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/api/alerts/${encodeURIComponent(alertId)}/read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-device-id": readerKey },
+      body: JSON.stringify({ reader_key: readerKey }),
+    });
+  } catch {
+    // best-effort
+  }
+}
+
+export async function apiRegisterAlertRecipient(input: {
+  phone: string;
+  audience?: AlertAudience;
+  name?: string;
+  deviceId?: string;
+  lat?: number;
+  lng?: number;
+}): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/alerts/recipients`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(input.audience && input.audience !== "citizens" ? { "x-authority-token": AUTH_TOKEN } : {}),
+        ...(input.deviceId ? { "x-device-id": input.deviceId } : {}),
+      },
+      body: JSON.stringify({
+        phone: input.phone,
+        audience: input.audience || "citizens",
+        name: input.name,
+        device_id: input.deviceId,
+        lat: input.lat,
+        lng: input.lng,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 // ── Original Citizen Endpoints ──
@@ -444,11 +652,37 @@ export async function apiSubmitReport(formData: FormData): Promise<{ report: Rep
       throw new Error(errorText || "Failed to submit emergency rescue request");
     }
     const data = await res.json();
-    if (data.report) {
-      inMemoryIncidents = inMemoryIncidents.filter((i) => i.id !== data.report.id);
-      inMemoryIncidents.unshift(data.report);
+
+    // Prefer the incident (has a stable id + status the citizen UI tracks) over
+    // the raw report event, and normalise it to a ReportItem so a refresh can
+    // reconcile the locally-cached snapshot against the server by the same id.
+    const inc = data.incident;
+    const normalized: ReportItem = inc
+      ? {
+          id: inc.id || inc.incident_id,
+          session_id: inc.device_id || deviceId,
+          device_id: inc.device_id || deviceId,
+          type: inc.type,
+          description: inc.description,
+          status: inc.status || "unverified",
+          created_at: inc.created_at || new Date().toISOString(),
+          updated_at: inc.updated_at,
+          lat: inc.latitude,
+          lng: inc.longitude,
+          location_wkt: inc.location_wkt,
+          address: inc.address,
+          reporter_name: inc.reporter_name,
+          report_count: inc.report_count,
+          reports: inc.reports,
+          action: data.action,
+        }
+      : (data.report as ReportItem);
+
+    if (normalized?.id) {
+      inMemoryIncidents = inMemoryIncidents.filter((i) => i.id !== normalized.id);
+      inMemoryIncidents.unshift(normalized);
     }
-    return data;
+    return { ...data, report: normalized };
   } catch (err) {
     console.warn("Backend API not reachable for submitReport, creating local report:", err);
     const deviceId = (formData.get("device_id") as string) || (formData.get("session_id") as string) || "dev-local-session";
@@ -489,13 +723,28 @@ export async function apiGetCitizenReports(sessionId: string): Promise<ReportIte
 
 export async function apiGetActiveReportForSession(sessionId: string): Promise<ReportItem | null> {
   const reports = await apiGetCitizenReports(sessionId);
-  const active = reports.find((r) => r.status !== "resolved");
+  const active = reports.find((r) => r.status !== "resolved" && r.status !== "cancelled");
   return active || null;
 }
 
 export async function apiGetIncidentById(incidentId: string): Promise<ReportItem | null> {
-  const inc = inMemoryIncidents.find((i) => i.id === incidentId);
-  return inc || null;
+  const local = inMemoryIncidents.find((i) => i.id === incidentId);
+  if (local) return local;
+
+  // After a page refresh the client-side cache is empty; fall back to the
+  // server so live status polling keeps working for an already-filed report.
+  try {
+    const all = await apiGetAllIncidents();
+    const remote = all.find((i) => i.id === incidentId);
+    if (remote) {
+      inMemoryIncidents = inMemoryIncidents.filter((i) => i.id !== remote.id);
+      inMemoryIncidents.unshift(remote);
+      return remote;
+    }
+  } catch {
+    // offline — nothing more we can do
+  }
+  return null;
 }
 
 // ── Authority / Incidents Endpoints ──
@@ -541,6 +790,19 @@ export async function apiGetAllResources(): Promise<ResourceItem[]> {
   return FALLBACK_RESOURCES;
 }
 
+export async function apiGetActiveAllocations(): Promise<AllocationLine[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/allocations`, { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) return data;
+    }
+  } catch {
+    // offline — no lines to draw
+  }
+  return [];
+}
+
 export async function apiGetShortlist(incidentId: string): Promise<ResourceItem[]> {
   try {
     const res = await fetch(`${API_BASE_URL}/api/incidents/${incidentId}/shortlist`, {
@@ -555,53 +817,24 @@ export async function apiGetShortlist(incidentId: string): Promise<ResourceItem[
   return FALLBACK_RESOURCES.slice(0, 3);
 }
 
+/**
+ * Confirm a resource→incident allocation. The server route
+ * (`/api/allocations/confirm`) is the source of truth: it charges the
+ * resource's capacity, flips it to `en_route`, moves the incident to
+ * `in_progress`, records the allocation and fires the emergency alert. This
+ * wrapper just forwards the call and keeps the local incident cache in step so
+ * the dashboard reflects the change on its next poll even if it briefly races.
+ */
 export async function apiConfirmAllocation(reportId: string, resourceId: string): Promise<{
   allocation: AllocationItem;
   report: ReportItem;
   resource: ResourceItem;
 }> {
-  // Find matching rescuer unit profile
-  let rescuerUnit = inMemoryRescuerLocations.find((r) => r.id === resourceId);
-  if (!rescuerUnit) {
-    const fallbackRes = FALLBACK_RESOURCES.find((r) => r.id === resourceId);
-    rescuerUnit = {
-      id: resourceId,
-      name: fallbackRes?.name || "Emergency Rescue Team",
-      callsign: "RESCUE-01",
-      type: fallbackRes?.type || "rescue_team",
-      leaderName: "Officer S. Kumar",
-      phone: "+91 98765 00000",
-      status: "en_route",
-      lat: (fallbackRes?.lat || 19.32) - 0.01,
-      lng: (fallbackRes?.lng || 84.80) - 0.01,
-      assignedReportId: reportId,
-      assignmentSource: "admin_dispatch",
-      supplies: { foodRationKits: 10, foodRationCapacity: 20, waterLiters: 50, waterCapacityLiters: 100, medicalKits: 5, medicalKitsCapacity: 10, ivFluidsCount: 5, shelterBedsAvailable: 0, shelterBedsTotal: 0, lifeJackets: 10, fuelLiters: 40, satPhoneBatteryPct: 85 }
-    };
-    inMemoryRescuerLocations.push(rescuerUnit);
-  } else {
-    rescuerUnit.status = "en_route";
-    rescuerUnit.assignedReportId = reportId;
-    rescuerUnit.assignmentSource = "admin_dispatch";
-  }
-
-  // Update in-memory incident
-  inMemoryIncidents = inMemoryIncidents.map((inc) => {
-    if (inc.id === reportId) {
-      return {
-        ...inc,
-        status: "in_progress",
-        assigned_rescuer_id: resourceId,
-        assigned_rescuer: rescuerUnit,
-        rescuer_status: "assigned",
-        assignment_source: "admin_dispatch",
-        denied_by_admin: false,
-      };
-    }
-    return inc;
-  });
-
-  const updatedIncident = inMemoryIncidents.find((i) => i.id === reportId)!;
+  let serverResult: {
+    allocation: AllocationItem;
+    report: ReportItem;
+    resource: ResourceItem;
+  } | null = null;
 
   try {
     const res = await fetch(`${API_BASE_URL}/api/allocations/confirm`, {
@@ -613,35 +846,57 @@ export async function apiConfirmAllocation(reportId: string, resourceId: string)
       body: JSON.stringify({ report_id: reportId, resource_id: resourceId }),
     });
     if (res.ok) {
-      return await res.json();
+      serverResult = await res.json();
+    } else {
+      throw new Error((await res.text()) || "Failed to confirm allocation");
     }
-  } catch {
-    // fallback to in-memory return
+  } catch (err) {
+    // Re-throw a network/server error so the UI can surface it; only swallow
+    // when we have nothing at all to fall back on.
+    if (!inMemoryIncidents.some((i) => i.id === reportId)) {
+      throw err instanceof Error ? err : new Error("Failed to confirm allocation");
+    }
   }
 
-  const confirmedAllocation: AllocationItem = {
-    id: "alloc-" + Math.floor(Math.random() * 1000),
-    report_id: reportId,
-    resource_id: resourceId,
-    status: "en_route",
-    recommended_at: new Date().toISOString(),
-    confirmed_at: new Date().toISOString(),
-  };
+  // Keep the local incident cache in step with the confirmed dispatch.
+  inMemoryIncidents = inMemoryIncidents.map((inc) =>
+    inc.id === reportId
+      ? {
+          ...inc,
+          status: "in_progress",
+          assigned_rescuer_id: resourceId,
+          rescuer_status: "assigned",
+          assignment_source: "admin_dispatch",
+          denied_by_admin: false,
+          recommended_allocation: null,
+        }
+      : inc
+  );
 
-  const allocatedResource: ResourceItem = {
-    id: resourceId,
-    name: rescuerUnit.name,
-    type: rescuerUnit.type,
-    capacity_total: 10,
-    capacity_used: 1,
-    status: "en_route",
-    disaster_types: ["flood", "medical"],
-  };
+  if (serverResult) return serverResult;
 
+  const nowIso = new Date().toISOString();
+  const fallbackRes = FALLBACK_RESOURCES.find((r) => r.id === resourceId);
   return {
-    allocation: confirmedAllocation,
-    report: updatedIncident,
-    resource: allocatedResource,
+    allocation: {
+      id: "alloc-" + Math.floor(Math.random() * 100000),
+      report_id: reportId,
+      resource_id: resourceId,
+      status: "en_route",
+      recommended_at: nowIso,
+      confirmed_at: nowIso,
+    },
+    report: inMemoryIncidents.find((i) => i.id === reportId)!,
+    resource:
+      fallbackRes || {
+        id: resourceId,
+        name: "Allocated resource",
+        type: "rescue_team",
+        capacity_total: 10,
+        capacity_used: 1,
+        status: "en_route",
+        disaster_types: [],
+      },
   };
 }
 
@@ -716,6 +971,19 @@ export async function apiDenyIncidentAndAutoRoute(incidentId: string): Promise<{
   });
 
   const updatedIncident = inMemoryIncidents.find((i) => i.id === incidentId)!;
+
+  // Emergency Alert System: nearest-unit auto-routing is still a deployment.
+  void apiBroadcastEmergencyAlert({
+    category: "resource_deployment",
+    alert_type: `${nearestRescuer.name} auto-routed`,
+    severity: "high",
+    audiences: ["citizens", "responders", "authorities"],
+    location_name: updatedIncident?.address || updatedIncident?.description,
+    lat: updatedIncident?.lat,
+    lng: updatedIncident?.lng,
+    instructions: "Nearest available unit has been routed to your location. Stay reachable.",
+    incident_id: incidentId,
+  });
 
   return {
     report: updatedIncident,
@@ -827,6 +1095,174 @@ export async function apiResolveIncident(incidentId: string): Promise<{
   return { report: updatedIncident };
 }
 
+/**
+ * Cross-verify a report (Report Verification System). `by` asserts the
+ * confirmer's role — the responder portal calls with "responder", the admin
+ * dashboard with "admin". Returns the recomputed verification result.
+ */
+export async function apiConfirmIncident(
+  incidentId: string,
+  opts: {
+    by: "citizen" | "responder" | "authority" | "admin";
+    actor_id?: string;
+    actor_name?: string;
+    note?: string;
+    lat?: number;
+    lng?: number;
+    manual_verified?: boolean;
+  }
+): Promise<{
+  status?: string;
+  verification?: VerificationResult;
+  confirmations?: ReportConfirmationItem[];
+}> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/incidents/${incidentId}/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to confirm report");
+    }
+    return await res.json();
+  } catch (err) {
+    if (err instanceof Error) throw err;
+    throw new Error("Failed to confirm report");
+  }
+}
+
+/**
+ * Abort the citizen's active SOS. Marks every active incident for the device
+ * `cancelled` locally, then tells the server so the admin dashboard and rescue
+ * team head drop it from their queues. `source: "citizen_safe"` is used when the
+ * cancel is triggered by an "I'm safe" check-in rather than an explicit tap.
+ */
+export async function apiCancelSos(
+  deviceId: string,
+  opts?: { reason?: string; source?: "citizen_cancel" | "citizen_safe" }
+): Promise<{ cancelled_count: number; incidents: ReportItem[] }> {
+  const source = opts?.source ?? "citizen_cancel";
+  const reason =
+    opts?.reason ||
+    (source === "citizen_safe" ? "Citizen reported safe — SOS aborted" : "Citizen cancelled the SOS");
+
+  inMemoryIncidents = inMemoryIncidents.map((inc) =>
+    inc.session_id === deviceId && inc.status !== "resolved" && inc.status !== "cancelled"
+      ? { ...inc, status: "cancelled" as const }
+      : inc
+  );
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/rescue/cancel`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-device-id": deviceId },
+      body: JSON.stringify({ device_id: deviceId, reason, source }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { cancelled_count: data.cancelled_count ?? 0, incidents: data.incidents ?? [] };
+    }
+  } catch {
+    // offline — the local update above is the best we can do
+  }
+  return { cancelled_count: 0, incidents: [] };
+}
+
+// ── Rescuer Unit Profiles ──
+
+export function emptyRescuerSupply(): import("@/types/rescuer").RescuerSupply {
+  return {
+    foodRationKits: 0,
+    foodRationCapacity: 0,
+    waterLiters: 0,
+    waterCapacityLiters: 0,
+    medicalKits: 0,
+    medicalKitsCapacity: 0,
+    ivFluidsCount: 0,
+    shelterBedsAvailable: 0,
+    shelterBedsTotal: 0,
+    lifeJackets: 0,
+    fuelLiters: 0,
+    satPhoneBatteryPct: 0,
+  };
+}
+
+// Reference unit profile — only served for DEMO_UNIT_ID.
+const REFERENCE_UNIT_PROFILE: RescuerUnitProfile = {
+  id: DEMO_UNIT_ID,
+  name: "NDRF Team Alpha",
+  callsign: "RESCUE-ALPHA-01",
+  type: "rescue_team",
+  leaderName: "Captain Rajesh Verma",
+  phone: "+91 98765 11001",
+  status: "available",
+  lat: 19.315,
+  lng: 84.794,
+  supplies: {
+    foodRationKits: 120,
+    foodRationCapacity: 200,
+    waterLiters: 450,
+    waterCapacityLiters: 800,
+    medicalKits: 18,
+    medicalKitsCapacity: 30,
+    ivFluidsCount: 45,
+    shelterBedsAvailable: 85,
+    shelterBedsTotal: 250,
+    lifeJackets: 40,
+    fuelLiters: 110,
+    satPhoneBatteryPct: 92,
+  },
+};
+
+const inMemoryUnitProfiles: Record<string, RescuerUnitProfile> = {
+  [DEMO_UNIT_ID]: { ...REFERENCE_UNIT_PROFILE, supplies: { ...REFERENCE_UNIT_PROFILE.supplies } },
+};
+
+/**
+ * Resolve the operating profile for a rescuer unit. Returns null when the unit
+ * has no stored profile yet — callers should synthesise one from the signed-in
+ * session (office coordinates, commander name, callsign).
+ */
+export async function apiGetRescuerUnitProfile(unitId: string): Promise<RescuerUnitProfile | null> {
+  if (!unitId) return null;
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/rescuer-locations?unit=${encodeURIComponent(unitId)}`, {
+      headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const match = Array.isArray(data) ? data.find((u: RescuerUnitProfile) => u.id === unitId) : data;
+      if (match && match.id) return match as RescuerUnitProfile;
+    }
+  } catch {
+    // fall through to in-memory store
+  }
+  return inMemoryUnitProfiles[unitId] ?? null;
+}
+
+export async function apiUpdateRescuerUnitProfile(
+  unitId: string,
+  patch: Partial<RescuerUnitProfile>
+): Promise<RescuerUnitProfile> {
+  const base = inMemoryUnitProfiles[unitId] ?? {
+    id: unitId,
+    name: patch.name || unitId,
+    callsign: patch.callsign || unitId,
+    type: patch.type || "rescue_team",
+    leaderName: patch.leaderName || "",
+    phone: patch.phone || "",
+    status: patch.status || "available",
+    lat: patch.lat ?? 0,
+    lng: patch.lng ?? 0,
+    supplies: patch.supplies || emptyRescuerSupply(),
+  };
+  const next: RescuerUnitProfile = { ...base, ...patch, supplies: { ...base.supplies, ...(patch.supplies || {}) } };
+  inMemoryUnitProfiles[unitId] = next;
+  return next;
+}
+
 // ── Rescue Team Head Resource Estimations ──
 
 let inMemoryHeadEstimations: HeadResourceEstimation[] = [];
@@ -882,10 +1318,18 @@ export async function apiGetIncidentsForOfficeRegion(
   if (!officeLat || !officeLng) return all;
 
   return all.filter((inc) => {
-    const incLat = inc.lat || 19.076;
-    const incLng = inc.lng || 72.8777;
-    const dist = calcDistanceKm(officeLat, officeLng, incLat, incLng);
-    return dist <= radiusKm;
+    let incLat = inc.lat;
+    let incLng = inc.lng;
+    if ((incLat === undefined || incLng === undefined) && inc.location_wkt) {
+      const m = inc.location_wkt.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
+      if (m) {
+        incLng = parseFloat(m[1]);
+        incLat = parseFloat(m[2]);
+      }
+    }
+    // Keep incidents without a resolvable location so they are never hidden from responders.
+    if (typeof incLat !== "number" || typeof incLng !== "number") return true;
+    return calcDistanceKm(officeLat, officeLng, incLat, incLng) <= radiusKm;
   });
 }
 
@@ -991,7 +1435,8 @@ let inMemoryDistrictDirectives: DistrictHeadDirective[] = [
 ];
 
 export async function apiGetDistrictHeadDirectives(headUnitId?: string): Promise<DistrictHeadDirective[]> {
-  return inMemoryDistrictDirectives;
+  if (!headUnitId) return inMemoryDistrictDirectives;
+  return inMemoryDistrictDirectives.filter((d) => d.headUnitId === headUnitId);
 }
 
 export async function apiAcknowledgeDistrictHeadDirective(
@@ -1070,6 +1515,9 @@ let inMemoryTeamMembers: TeamMember[] = [
 ];
 
 export async function apiGetTeamMembers(teamId?: string): Promise<TeamMember[]> {
+  // Seed roster only belongs to the reference/demo unit. A live unit with its own
+  // route id starts with an empty roster until members are registered.
+  if (teamId && teamId !== DEMO_UNIT_ID) return [];
   return inMemoryTeamMembers;
 }
 
@@ -1153,10 +1601,10 @@ let inMemoryMemberAllocations: MemberOrderAllocation[] = [
 ];
 
 export async function apiGetMemberAllocations(teamId?: string, memberId?: string): Promise<MemberOrderAllocation[]> {
-  if (memberId) {
-    return inMemoryMemberAllocations.filter((a) => a.memberId === memberId);
-  }
-  return inMemoryMemberAllocations;
+  let list = inMemoryMemberAllocations;
+  if (teamId) list = list.filter((a) => a.teamId === teamId);
+  if (memberId) list = list.filter((a) => a.memberId === memberId);
+  return list;
 }
 
 export async function apiCreateMemberAllocation(

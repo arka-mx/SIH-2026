@@ -14,6 +14,8 @@ export async function POST(req: NextRequest) {
     let description = "";
     let lat = 0;
     let lng = 0;
+    let address = "";
+    let reporter_name = "";
     let photo_url: string | undefined = undefined;
 
     const forwardedFor = req.headers.get("x-forwarded-for");
@@ -28,6 +30,8 @@ export async function POST(req: NextRequest) {
       description = (formData.get("description") as string) || "";
       lat = parseFloat((formData.get("lat") as string) || "0");
       lng = parseFloat((formData.get("lng") as string) || "0");
+      address = (formData.get("address") as string) || "";
+      reporter_name = (formData.get("reporter_name") as string) || "";
 
       const photoFile = formData.get("photo") as File | null;
       if (photoFile && photoFile.name) {
@@ -46,6 +50,8 @@ export async function POST(req: NextRequest) {
       description = body.description || "";
       lat = body.lat || 0;
       lng = body.lng || 0;
+      address = body.address || "";
+      reporter_name = body.reporter_name || "";
       photo_url = body.photo_url;
     }
 
@@ -56,6 +62,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const reporterKindHeader = (req.headers.get("x-reporter-kind") || "").toLowerCase();
+    const reporter_kind =
+      reporterKindHeader === "responder" || reporterKindHeader === "authority"
+        ? (reporterKindHeader as "responder" | "authority")
+        : "citizen";
+
     const result = await processRescueSubmission({
       device_id,
       type,
@@ -65,6 +77,10 @@ export async function POST(req: NextRequest) {
       ip_address,
       user_agent,
       idempotency_key,
+      address,
+      reporter_name,
+      reporter_kind,
+      has_photo: !!photo_url,
     });
 
     const formattedReport = {
@@ -79,9 +95,13 @@ export async function POST(req: NextRequest) {
       lat,
       lng,
       location_wkt: `POINT(${lng} ${lat})`,
+      address: result.incident.address,
+      reporter_name: result.incident.reporter_name,
       action: result.action,
       reports: result.incident.reports,
       report_count: result.incident.report_count,
+      verification: result.incident.verification,
+      confirmations: result.incident.confirmations,
     };
 
     return NextResponse.json({ report: formattedReport, action: result.action }, { status: result.action === "CREATED" ? 201 : 200 });
@@ -105,13 +125,17 @@ export async function GET(req: NextRequest) {
       device_id: inc.device_id,
       type: inc.type,
       description: inc.description,
+      reporter_name: inc.reporter_name,
       status: inc.status,
       created_at: inc.created_at,
       lat: inc.latitude,
       lng: inc.longitude,
       location_wkt: inc.location_wkt,
+      address: inc.address,
       reports: inc.reports,
       report_count: inc.report_count,
+      verification: inc.verification,
+      confirmations: inc.confirmations,
     }));
 
     return NextResponse.json(formatted);

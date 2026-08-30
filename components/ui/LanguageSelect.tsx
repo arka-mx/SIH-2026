@@ -101,6 +101,7 @@ export function LanguageSelect({ label, variant = "hero", className }: Props) {
     <div
       ref={rootRef}
       className={`lang-select${className ? ` ${className}` : ""}`}
+      data-no-translate
       data-variant={variant}
       data-open={open}
     >

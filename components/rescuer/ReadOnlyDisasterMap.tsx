@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { ReportItem, calcDistanceKm } from "@/lib/api";
 import { IncidentMap } from "@/components/incidents/IncidentMap";
+import { VerificationBadge } from "@/components/incidents/VerificationBadge";
 
 interface ReadOnlyDisasterMapProps {
   incidents: ReportItem[];
@@ -27,10 +28,11 @@ interface ReadOnlyDisasterMapProps {
 
 export function ReadOnlyDisasterMap({
   incidents = [],
-  userLat = 19.315,
-  userLng = 84.794,
-  officeName = "Regional Command Base",
+  userLat = 0,
+  userLng = 0,
+  officeName,
 }: ReadOnlyDisasterMapProps) {
+  const hasBase = Number.isFinite(userLat) && Number.isFinite(userLng) && (userLat !== 0 || userLng !== 0);
   const [selectedId, setSelectedId] = useState<string | null>(
     incidents.length > 0 ? incidents[0].id : null
   );
@@ -54,21 +56,24 @@ export function ReadOnlyDisasterMap({
 
   // Calculate distance to each incident
   const incidentsWithDistance = incidents.map((inc) => {
-    let lat = inc.lat ?? 19.315;
-    let lng = inc.lng ?? 84.794;
-    if ((inc.lat === undefined || inc.lng === undefined) && inc.location_wkt) {
+    let lat = inc.lat;
+    let lng = inc.lng;
+    if ((lat === undefined || lng === undefined) && inc.location_wkt) {
       const match = inc.location_wkt.match(/POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)/i);
       if (match) {
         lng = parseFloat(match[1]);
         lat = parseFloat(match[2]);
       }
     }
-    const distKm = Math.round(calcDistanceKm(userLat, userLng, lat, lng) * 10) / 10;
+    const distKm =
+      hasBase && typeof lat === "number" && typeof lng === "number"
+        ? Math.round(calcDistanceKm(userLat, userLng, lat, lng) * 10) / 10
+        : null;
     return { ...inc, lat, lng, distKm };
   });
 
-  // Sort by nearest distance
-  incidentsWithDistance.sort((a, b) => a.distKm - b.distKm);
+  // Sort by nearest distance (incidents without a fix sink to the bottom)
+  incidentsWithDistance.sort((a, b) => (a.distKm ?? Infinity) - (b.distKm ?? Infinity));
 
   const selectedIncident =
     incidentsWithDistance.find((i) => i.id === selectedId) ||
@@ -100,11 +105,13 @@ export function ReadOnlyDisasterMap({
 
           <div className="text-right">
             <span className="text-[11px] font-mono font-bold text-slate-700 block">
-              Base: {officeName}
+              Base: {officeName || "Not set"}
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">
-              {userLat.toFixed(4)}, {userLng.toFixed(4)}
-            </span>
+            {hasBase && (
+              <span className="text-[10px] text-slate-400 font-mono">
+                {userLat.toFixed(4)}, {userLng.toFixed(4)}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -155,18 +162,23 @@ export function ReadOnlyDisasterMap({
                       </span>
                     </div>
                     <h3 className="font-bold text-sm text-slate-900 capitalize mt-0.5">
-                      {selectedIncident.type} Emergency at {selectedIncident.address || "Sector Zone"}
+                      {selectedIncident.type} emergency
+                      {selectedIncident.address ? ` at ${selectedIncident.address}` : ""}
                     </h3>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <span className="text-sm font-mono font-bold text-slate-900 block">
-                    {selectedIncident.distKm} km from Base
-                  </span>
-                  <span className="text-[11px] text-slate-500 font-mono">
-                    {selectedIncident.lat?.toFixed(4)}, {selectedIncident.lng?.toFixed(4)}
-                  </span>
+                  {selectedIncident.distKm !== null && (
+                    <span className="text-sm font-mono font-bold text-slate-900 block">
+                      {selectedIncident.distKm} km from base
+                    </span>
+                  )}
+                  {typeof selectedIncident.lat === "number" && typeof selectedIncident.lng === "number" && (
+                    <span className="text-[11px] text-slate-500 font-mono">
+                      {selectedIncident.lat.toFixed(4)}, {selectedIncident.lng.toFixed(4)}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -181,8 +193,10 @@ export function ReadOnlyDisasterMap({
                   <strong>{selectedIncident.report_count || 1} logged</strong>
                 </div>
                 <div className="adm-kv">
-                  <span>Severity</span>
-                  <strong className="capitalize text-red-700 font-bold">High</strong>
+                  <span>Cluster</span>
+                  <strong className="font-mono">
+                    {selectedIncident.cluster_count || selectedIncident.report_count || 1} report(s)
+                  </strong>
                 </div>
                 <div className="adm-kv">
                   <span>Reported</span>
@@ -231,10 +245,13 @@ export function ReadOnlyDisasterMap({
                         <span className="font-bold text-xs text-slate-900 capitalize">
                           {inc.type} Zone
                         </span>
+                        <VerificationBadge verification={inc.verification} size="xs" />
                       </div>
-                      <span className="font-mono font-bold text-xs text-slate-800">
-                        {inc.distKm} km
-                      </span>
+                      {inc.distKm !== null && (
+                        <span className="font-mono font-bold text-xs text-slate-800">
+                          {inc.distKm} km
+                        </span>
+                      )}
                     </div>
 
                     <p className="text-[11px] text-slate-600 line-clamp-2 mt-1.5 leading-snug">
@@ -243,7 +260,7 @@ export function ReadOnlyDisasterMap({
 
                     <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-100 text-[10px] text-slate-400">
                       <span className="flex items-center gap-1 truncate max-w-[140px]">
-                        <MapPin size={11} /> {inc.address || "Sector Grid"}
+                        <MapPin size={11} /> {inc.address || "Location pending"}
                       </span>
                       <span className="font-mono">
                         {new Date(inc.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

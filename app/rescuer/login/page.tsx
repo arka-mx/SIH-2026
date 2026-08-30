@@ -89,12 +89,14 @@ export default function RescuerLoginPage() {
 
   // Profile fields
   const [isTeamHead, setIsTeamHead] = useState<boolean>(true);
-  const rescuerId = process.env.NEXT_PUBLIC_DEFAULT_RESCUER_ID || "demo-team-alpha";
+  const [rescuerId, setRescuerId] = useState<string>(
+    process.env.NEXT_PUBLIC_DEFAULT_RESCUER_ID || ""
+  );
 
-  // Office Location fields
-  const [officeName, setOfficeName] = useState("Brahmapur Regional Disaster Command");
-  const [officeLat, setOfficeLat] = useState<number>(19.315);
-  const [officeLng, setOfficeLng] = useState<number>(84.794);
+  // Office Location fields — captured from GPS or manual entry, never pre-seeded.
+  const [officeName, setOfficeName] = useState("");
+  const [officeLat, setOfficeLat] = useState<number | null>(null);
+  const [officeLng, setOfficeLng] = useState<number | null>(null);
   const [regionRadius, setRegionRadius] = useState<number>(25);
 
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -117,7 +119,7 @@ export default function RescuerLoginPage() {
           const address = await apiReverseGeocode(lat, lng);
           setOfficeName(address);
         } catch {
-          setOfficeName(`Office Base (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+          if (!officeName.trim()) setOfficeName(`Base @ ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
         }
         setGpsLoading(false);
       },
@@ -154,8 +156,18 @@ export default function RescuerLoginPage() {
   async function handleCompleteSetup(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setLoading(true);
 
+    const unitId = rescuerId.trim();
+    if (!unitId) {
+      setError("Enter your rescuer unit ID or callsign.");
+      return;
+    }
+    if (officeLat === null || officeLng === null) {
+      setError("Set your office / base location — detect it via GPS or enter coordinates.");
+      return;
+    }
+
+    setLoading(true);
     try {
       const idToken = await auth.currentUser?.getIdToken();
       if (!idToken) {
@@ -169,9 +181,9 @@ export default function RescuerLoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           idToken,
-          rescuerId: rescuerId.trim(),
+          rescuerId: unitId,
           isTeamHead,
-          officeName,
+          officeName: officeName.trim(),
           officeLat,
           officeLng,
           regionRadiusKm: regionRadius,
@@ -181,7 +193,7 @@ export default function RescuerLoginPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || t.error);
 
-      router.push(data.redirect || `/rescuer/${encodeURIComponent(rescuerId.trim() || "demo-team-alpha")}`);
+      router.push(data.redirect || `/rescuer/${encodeURIComponent(unitId)}`);
       router.refresh();
     } catch (err) {
       console.error("Rescuer setup failed:", err);
@@ -192,7 +204,7 @@ export default function RescuerLoginPage() {
   }
 
   return (
-    <main className="public-home theme-light">
+    <main className="public-home theme-light" data-no-translate>
       <BackButton />
       <section className="access-form-layout">
         <div className="w-full bg-white border border-[#c8d1dc] border-t-[3px] border-t-[#c2410c] p-6 sm:p-8 shadow-[0_1px_2px_rgba(15,27,45,0.06),0_14px_30px_-12px_rgba(15,27,45,0.18)] space-y-5">
@@ -271,6 +283,23 @@ export default function RescuerLoginPage() {
                 </span>
               </div>
 
+              {/* unit id / callsign */}
+              <div className="space-y-2">
+                <label htmlFor="rescuer-id" className="block text-xs font-bold text-[#475569]">
+                  {t.teamId}
+                </label>
+                <input
+                  id="rescuer-id"
+                  type="text"
+                  required
+                  value={rescuerId}
+                  onChange={(e) => setRescuerId(e.target.value)}
+                  placeholder="e.g. NDRF-ALPHA-01"
+                  autoCapitalize="characters"
+                  className="w-full p-2.5 bg-white border border-[#cbd5e1] text-xs font-semibold text-[#0f1b2d] focus:border-[#c2410c] focus:outline-hidden"
+                />
+              </div>
+
               {/* role */}
               <div className="space-y-2">
                 <span className="block text-xs font-bold text-[#475569]">Team leadership designation</span>
@@ -329,7 +358,9 @@ export default function RescuerLoginPage() {
                   className="w-full p-2.5 bg-white border border-[#cbd5e1] text-xs font-semibold text-[#0f1b2d] focus:border-[#c2410c] focus:outline-hidden"
                 />
                 <p className="text-[11px] font-mono text-[#94a3b8]">
-                  {officeLat.toFixed(4)}, {officeLng.toFixed(4)}
+                  {officeLat !== null && officeLng !== null
+                    ? `${officeLat.toFixed(4)}, ${officeLng.toFixed(4)}`
+                    : "No coordinates set — use current location"}
                 </p>
               </div>
 

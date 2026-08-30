@@ -40,13 +40,14 @@ interface MemberFieldPortalProps {
 
 export function MemberFieldPortal({
   teamId,
-  teamName = "NDRF Team Alpha",
-  memberId = "mem-01",
-  memberName = "Officer Ramesh Patnaik",
-  headName = "Captain Rajesh Verma",
-  headPhone = "+91 98765 11001",
-  headOffice = "Brahmapur Regional Disaster Command",
+  teamName,
+  memberId,
+  memberName = "Field Rescuer",
+  headName = "your Rescue Team Head",
+  headPhone,
+  headOffice,
 }: MemberFieldPortalProps) {
+  const teamLabel = teamName || teamId;
   const [allocations, setAllocations] = useState<MemberOrderAllocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -115,7 +116,7 @@ export function MemberFieldPortal({
                 <HardHat size={12} /> Normal Rescue Team Field Station
               </span>
               <span className="adm-status adm-status--green font-mono">
-                {teamName}
+                {teamLabel}
               </span>
               <span className="adm-status adm-status--mute font-mono">
                 Member: {memberName}
@@ -150,14 +151,14 @@ export function MemberFieldPortal({
             <span className="flex items-center gap-1.5 font-bold text-slate-700">
               <Building size={14} className="text-[#115e59]" /> Regional Base Command
             </span>
-            <strong className="text-slate-900 text-xs truncate">{headOffice}</strong>
+            <strong className="text-slate-900 text-xs truncate">{headOffice || "—"}</strong>
           </div>
 
           <div className="adm-kv">
             <span className="flex items-center gap-1.5 font-bold text-slate-700">
               <Phone size={14} className="text-emerald-600" /> Head Point of Contact
             </span>
-            <strong className="text-emerald-700 font-mono text-xs">{headPhone}</strong>
+            <strong className="text-emerald-700 font-mono text-xs">{headPhone || "Not published"}</strong>
           </div>
         </div>
 

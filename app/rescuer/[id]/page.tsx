@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { RescueHeadResourceEstimator } from "@/components/rescuer/RescueHeadResourceEstimator";
 import { TeamHeadVolunteerPool } from "@/components/rescuer/TeamHeadVolunteerPool";
 import { RescuerShell } from "@/components/rescuer/RescuerShell";
@@ -11,158 +12,58 @@ import { DistrictHeadConnection } from "@/components/rescuer/DistrictHeadConnect
 import { ReadOnlyDisasterMap } from "@/components/rescuer/ReadOnlyDisasterMap";
 import { MemberResourceAllocationManager } from "@/components/rescuer/MemberResourceAllocationManager";
 import { MemberFieldPortal } from "@/components/rescuer/MemberFieldPortal";
-import { apiGetAllIncidents, apiGetIncidentsForOfficeRegion, ReportItem } from "@/lib/api";
+import {
+  apiGetAllIncidents,
+  apiGetIncidentsForOfficeRegion,
+  apiGetRescuerUnitProfile,
+  apiUpdateRescuerUnitProfile,
+  emptyRescuerSupply,
+  ReportItem,
+} from "@/lib/api";
 import { fetchRescuerSession, RescuerUserSession } from "@/lib/rescuerAuth";
 import { RescuerSupply, RescuerUnitProfile } from "@/types/rescuer";
 import { RotateCw, MapPin, LogIn, Radio, Eye, PackagePlus } from "lucide-react";
 
-// Mock Rescuer Database mapping
-const INITIAL_RESCUER_PROFILES: Record<string, RescuerUnitProfile> = {
-  "demo-team-alpha": {
-    id: "demo-team-alpha",
-    name: "NDRF Team Alpha",
-    callsign: "RESCUE-ALPHA-01",
+const DEFAULT_REGION_RADIUS_KM = 35;
+
+/** Build a working unit profile from the signed-in session when no stored profile exists. */
+function profileFromSession(unitId: string, session: RescuerUserSession): RescuerUnitProfile {
+  return {
+    id: unitId,
+    name: session.officeName ? `${session.officeName} · ${unitId}` : unitId,
+    callsign: unitId.toUpperCase(),
     type: "rescue_team",
-    leaderName: "Captain Rajesh Verma",
-    phone: "+91 98765 11001",
+    leaderName: session.name || session.email || "",
+    phone: "",
     status: "available",
-    lat: 19.3150,
-    lng: 84.7940,
-    supplies: {
-      foodRationKits: 120,
-      foodRationCapacity: 200,
-      waterLiters: 450,
-      waterCapacityLiters: 800,
-      medicalKits: 18,
-      medicalKitsCapacity: 30,
-      ivFluidsCount: 45,
-      shelterBedsAvailable: 85,
-      shelterBedsTotal: 250,
-      lifeJackets: 40,
-      fuelLiters: 110,
-      satPhoneBatteryPct: 92,
-    },
-  },
-  "res-boat-01": {
-    id: "res-boat-01",
-    name: "Inflatable Boat Squad IR-1",
-    callsign: "BOAT-DELTA-03",
-    type: "boat",
-    leaderName: "Inspector Sunil Naik",
-    phone: "+91 98765 11002",
-    status: "available",
-    lat: 19.0680,
-    lng: 72.8650,
-    supplies: {
-      foodRationKits: 40,
-      foodRationCapacity: 80,
-      waterLiters: 150,
-      waterCapacityLiters: 300,
-      medicalKits: 8,
-      medicalKitsCapacity: 15,
-      ivFluidsCount: 15,
-      shelterBedsAvailable: 0,
-      shelterBedsTotal: 0,
-      lifeJackets: 60,
-      fuelLiters: 75,
-      satPhoneBatteryPct: 88,
-    },
-  },
-  "res-amb-102": {
-    id: "res-amb-102",
-    name: "City Hospital Rapid Ambulance AMB-102",
-    callsign: "MED-UNIT-102",
-    type: "ambulance",
-    leaderName: "Dr. Ananya Sen",
-    phone: "+91 98765 11003",
-    status: "available",
-    lat: 19.0820,
-    lng: 72.8900,
-    supplies: {
-      foodRationKits: 20,
-      foodRationCapacity: 30,
-      waterLiters: 80,
-      waterCapacityLiters: 150,
-      medicalKits: 25,
-      medicalKitsCapacity: 40,
-      ivFluidsCount: 80,
-      shelterBedsAvailable: 0,
-      shelterBedsTotal: 0,
-      lifeJackets: 5,
-      fuelLiters: 90,
-      satPhoneBatteryPct: 95,
-    },
-  },
-  "res-shelter-dharavi": {
-    id: "res-shelter-dharavi",
-    name: "Dharavi Community Camp Command",
-    callsign: "SHELTER-HUB-01",
-    type: "shelter",
-    leaderName: "Officer Meera Patnaik",
-    phone: "+91 98765 11004",
-    status: "available",
-    lat: 19.0400,
-    lng: 72.8500,
-    supplies: {
-      foodRationKits: 450,
-      foodRationCapacity: 600,
-      waterLiters: 1500,
-      waterCapacityLiters: 2500,
-      medicalKits: 35,
-      medicalKitsCapacity: 50,
-      ivFluidsCount: 120,
-      shelterBedsAvailable: 180,
-      shelterBedsTotal: 350,
-      lifeJackets: 20,
-      fuelLiters: 200,
-      satPhoneBatteryPct: 100,
-    },
-  },
-};
+    lat: session.officeLat || 0,
+    lng: session.officeLng || 0,
+    supplies: emptyRescuerSupply(),
+  };
+}
 
 export default function RescuerDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const router = useRouter();
   const resolvedParams = use(params);
-  const rescuerId = resolvedParams.id || "demo-team-alpha";
+  const rescuerId = resolvedParams.id;
 
   const [session, setSession] = useState<RescuerUserSession | null>(null);
   const sessionRef = useRef<RescuerUserSession | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
-  // Role state: defaults to Team Head, can be toggled
   const [isTeamHead, setIsTeamHead] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<string>("overview");
 
-  const [profile, setProfile] = useState<RescuerUnitProfile>(
-    INITIAL_RESCUER_PROFILES[rescuerId] || INITIAL_RESCUER_PROFILES["demo-team-alpha"]
-  );
-
+  const [profile, setProfile] = useState<RescuerUnitProfile | null>(null);
   const [incidents, setIncidents] = useState<ReportItem[]>([]);
   const [assignedIncident, setAssignedIncident] = useState<ReportItem | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchRescuerSession().then((s) => {
-      if (cancelled) return;
-      sessionRef.current = s;
-      setSession(s);
-      if (s) {
-        setIsTeamHead(s.isTeamHead);
-        if (!s.isTeamHead) {
-          setActiveTab("member-portal");
-        }
-      }
-      loadData();
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const userSession = sessionRef.current;
@@ -171,39 +72,57 @@ export default function RescuerDetailPage({
         data = await apiGetIncidentsForOfficeRegion(
           userSession.officeLat,
           userSession.officeLng,
-          userSession.regionRadiusKm || 35
+          userSession.regionRadiusKm || DEFAULT_REGION_RADIUS_KM
         );
       } else {
         data = await apiGetAllIncidents();
       }
       setIncidents(data);
 
-      const verifiedInc = data.find((i) => i.status === "verified" || i.status === "in_progress");
-      if (verifiedInc) {
-        setAssignedIncident(verifiedInc);
-      }
+      const activeInc = data.find((i) => i.status === "verified" || i.status === "in_progress");
+      setAssignedIncident(activeInc ?? null);
     } catch (err) {
       console.warn("Could not load incidents for rescuer dashboard:", err);
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    setProfile(INITIAL_RESCUER_PROFILES[rescuerId] || INITIAL_RESCUER_PROFILES["demo-team-alpha"]);
-  }, [rescuerId]);
+    let cancelled = false;
+    (async () => {
+      const s = await fetchRescuerSession();
+      if (cancelled) return;
+
+      if (!s) {
+        router.replace("/rescuer/login");
+        return;
+      }
+
+      sessionRef.current = s;
+      setSession(s);
+      setAuthChecked(true);
+      setIsTeamHead(s.isTeamHead);
+      setActiveTab(s.isTeamHead ? "overview" : "member-portal");
+
+      const stored = await apiGetRescuerUnitProfile(rescuerId);
+      if (cancelled) return;
+      setProfile(stored ?? profileFromSession(rescuerId, s));
+
+      await loadData();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [rescuerId, router, loadData]);
 
   function handleRoleToggle(head: boolean) {
     setIsTeamHead(head);
-    if (head) {
-      setActiveTab("overview");
-    } else {
-      setActiveTab("member-portal");
-    }
+    setActiveTab(head ? "overview" : "member-portal");
   }
 
   function handleStatusChange(newStatus: "available" | "en_route" | "at_scene") {
-    setProfile((prev) => ({ ...prev, status: newStatus }));
+    setProfile((prev) => (prev ? { ...prev, status: newStatus } : prev));
   }
 
   function handleAssignmentChange(
@@ -211,21 +130,33 @@ export default function RescuerDetailPage({
     source: "admin_dispatch" | "nearest_fallback"
   ) {
     setAssignedIncident(incident);
-    setProfile((prev) => ({
-      ...prev,
-      assignedReportId: incident?.id,
-      assignmentSource: source,
-    }));
+    setProfile((prev) =>
+      prev ? { ...prev, assignedReportId: incident?.id, assignmentSource: source } : prev
+    );
   }
 
   function handleUpdateSupplies(updated: RescuerSupply) {
-    setProfile((prev) => ({ ...prev, supplies: updated }));
+    setProfile((prev) => (prev ? { ...prev, supplies: updated } : prev));
+    void apiUpdateRescuerUnitProfile(rescuerId, { supplies: updated });
   }
 
-  const officeLat = session?.officeLat || profile.lat;
-  const officeLng = session?.officeLng || profile.lng;
-  const officeName = session?.officeName || "Brahmapur Regional Disaster Command";
-  const commanderName = session?.name || profile.leaderName;
+  if (!authChecked || !session || !profile) {
+    return (
+      <div className="admin-shell">
+        <main className="admin-main">
+          <div className="adm-card text-center py-16 text-sm text-slate-500">
+            Loading field command workspace…
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  const officeLat = session.officeLat || profile.lat;
+  const officeLng = session.officeLng || profile.lng;
+  const officeName = session.officeName || profile.name;
+  const commanderName = profile.leaderName || session.name || session.email;
+  const memberName = session.name || session.email || "Field Rescuer";
 
   return (
     <RescuerShell
@@ -252,62 +183,47 @@ export default function RescuerDetailPage({
 
             <p className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
               <span>{commanderName}</span>
-              <span>·</span>
-              <span>{officeName}</span>
-              <span>·</span>
-              <span className="flex items-center gap-1 font-mono">
-                <MapPin size={12} /> {officeLat.toFixed(4)}, {officeLng.toFixed(4)}
-              </span>
+              {officeName && (
+                <>
+                  <span>·</span>
+                  <span>{officeName}</span>
+                </>
+              )}
+              {(officeLat || officeLng) && (
+                <>
+                  <span>·</span>
+                  <span className="flex items-center gap-1 font-mono">
+                    <MapPin size={12} /> {officeLat.toFixed(4)}, {officeLng.toFixed(4)}
+                  </span>
+                </>
+              )}
             </p>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => handleRoleToggle(!isTeamHead)}
-              className="adm-btn"
-            >
+            <button type="button" onClick={() => handleRoleToggle(!isTeamHead)} className="adm-btn">
               {isTeamHead ? "Member view" : "Head view"}
             </button>
             <Link href="/rescuer/login" className="adm-btn">
               <LogIn size={14} /> Office login
             </Link>
-            <button onClick={loadData} className="adm-btn">
-              <RotateCw size={14} /> Refresh
+            <button onClick={loadData} className="adm-btn" disabled={loading}>
+              <RotateCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
             </button>
           </div>
         </div>
       </div>
 
-      {/* ═════════════════════════════════════════════════════════════════════
-          A. RESCUE TEAM HEAD VIEWS
-         ═════════════════════════════════════════════════════════════════════ */}
+      {/* ══ A. RESCUE TEAM HEAD VIEWS ══ */}
       {isTeamHead && (
         <>
-          {/* TAB 1: OVERVIEW / DASHBOARD */}
           {activeTab === "overview" && (
             <div className="space-y-6">
-              {/* Quick Navigation */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {[
-                  {
-                    tab: "district-head",
-                    icon: Radio,
-                    title: "District Head",
-                    desc: "Orders and messages from the district office.",
-                  },
-                  {
-                    tab: "disasters",
-                    icon: Eye,
-                    title: "Radar",
-                    desc: "Live citizen SOS incidents near your office.",
-                  },
-                  {
-                    tab: "allocate",
-                    icon: PackagePlus,
-                    title: "Allocate",
-                    desc: "Assign ration and resource quotas to members.",
-                  },
+                  { tab: "district-head", icon: Radio, title: "District Head", desc: "Orders and messages from the district office." },
+                  { tab: "disasters", icon: Eye, title: "Radar", desc: "Live citizen SOS incidents near your office." },
+                  { tab: "allocate", icon: PackagePlus, title: "Allocate", desc: "Assign ration and resource quotas to members." },
                 ].map(({ tab, icon: Icon, title, desc }) => (
                   <button
                     key={tab}
@@ -323,34 +239,31 @@ export default function RescuerDetailPage({
                 ))}
               </div>
 
-              {/* Disaster Assignment & Fail-Safe Control */}
               <DisasterAssignmentCard
                 rescuerId={rescuerId}
                 rescuerType={profile.type}
-                rescuerLat={profile.lat}
-                rescuerLng={profile.lng}
+                rescuerLat={profile.lat || officeLat}
+                rescuerLng={profile.lng || officeLng}
                 assignedIncident={assignedIncident}
                 allIncidents={incidents}
                 onAssignmentChange={handleAssignmentChange}
                 onStatusChange={handleStatusChange}
               />
 
-              {/* Rescue Team Head Resource Estimator & Directive Broadcast */}
               <RescueHeadResourceEstimator
                 assignedIncident={assignedIncident}
                 rescuerId={rescuerId}
                 leaderName={commanderName}
               />
 
-              {/* Rescue Team Head Direct Volunteer Request Stream */}
               <TeamHeadVolunteerPool
                 officeLat={officeLat}
                 officeLng={officeLng}
                 officeName={officeName}
-                isTeamHead={true}
+                regionRadiusKm={session.regionRadiusKm || DEFAULT_REGION_RADIUS_KM}
+                isTeamHead
               />
 
-              {/* Field Supply & Capacity Inventory Tracker */}
               <SupplyTracker
                 initialSupplies={profile.supplies}
                 onUpdateSupplies={handleUpdateSupplies}
@@ -358,7 +271,6 @@ export default function RescuerDetailPage({
             </div>
           )}
 
-          {/* TAB 2: READ-ONLY DISASTER MAP */}
           {activeTab === "disasters" && (
             <ReadOnlyDisasterMap
               incidents={incidents}
@@ -368,7 +280,6 @@ export default function RescuerDetailPage({
             />
           )}
 
-          {/* TAB 3: DISTRICT HEAD CONNECTION (EXCLUSIVE FOR RESCUE TEAM HEAD) */}
           {activeTab === "district-head" && (
             <DistrictHeadConnection
               headUnitId={rescuerId}
@@ -377,26 +288,26 @@ export default function RescuerDetailPage({
             />
           )}
 
-          {/* TAB 4: RATION & RESOURCE ALLOCATION TO MEMBERS */}
           {activeTab === "allocate" && (
             <MemberResourceAllocationManager
               teamId={rescuerId}
+              teamName={profile.name}
               headName={commanderName}
+              headPhone={profile.phone}
               headOffice={officeName}
             />
           )}
 
-          {/* TAB 5: VOLUNTEER POOL */}
           {activeTab === "volunteers" && (
             <TeamHeadVolunteerPool
               officeLat={officeLat}
               officeLng={officeLng}
               officeName={officeName}
-              isTeamHead={true}
+              regionRadiusKm={session.regionRadiusKm || DEFAULT_REGION_RADIUS_KM}
+              isTeamHead
             />
           )}
 
-          {/* TAB 6: SUPPLY INVENTORY */}
           {activeTab === "supplies" && (
             <SupplyTracker
               initialSupplies={profile.supplies}
@@ -406,25 +317,21 @@ export default function RescuerDetailPage({
         </>
       )}
 
-      {/* ═════════════════════════════════════════════════════════════════════
-          B. NORMAL RESCUE TEAM MEMBER VIEWS
-         ═════════════════════════════════════════════════════════════════════ */}
+      {/* ══ B. RESCUE TEAM MEMBER VIEWS ══ */}
       {!isTeamHead && (
         <>
-          {/* TAB 1: MEMBER ORDERS & LIVE RESOURCE COMPLETION */}
           {activeTab === "member-portal" && (
             <MemberFieldPortal
               teamId={rescuerId}
               teamName={profile.name}
-              memberId="mem-01"
-              memberName="Officer Ramesh Patnaik"
+              memberId={session.id}
+              memberName={memberName}
               headName={commanderName}
-              headPhone={profile.phone || "+91 98765 11001"}
+              headPhone={profile.phone}
               headOffice={officeName}
             />
           )}
 
-          {/* TAB 2: MEMBER UNIT SUPPLIES */}
           {activeTab === "member-supplies" && (
             <div className="space-y-4">
               <div className="adm-card">

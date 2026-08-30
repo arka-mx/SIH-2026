@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { ArrowRight, UsersRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BackButton } from "@/components/public/BackButton";
 import { useLanguage } from "@/lib/language";
+import { getCitizenProfile, saveCitizenProfile } from "@/lib/citizenSession";
 
 const TRANSLATIONS = {
   English: {
@@ -68,13 +69,22 @@ export default function CitizenLoginPage() {
 
   const t = TRANSLATIONS[lang as SupportedLang] || TRANSLATIONS.English;
 
+  // Prefill from a previously saved session so a returning citizen keeps their name.
+  useEffect(() => {
+    const saved = getCitizenProfile();
+    if (saved?.name) setName(saved.name);
+  }, []);
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const clean = name.trim();
+    if (!clean) return;
+    saveCitizenProfile(clean);
     router.push("/citizen");
   }
 
   return (
-    <main className="public-home theme-light">
+    <main className="public-home theme-light" data-no-translate>
       <BackButton />
       <section className="access-form-layout">
         <form className="access-form" onSubmit={handleSubmit}>
