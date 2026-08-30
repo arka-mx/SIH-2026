@@ -58,6 +58,7 @@ export interface CitizenResponse {
   locationName: string;
   isRadicalRegion: boolean;
   autoAlertTriggered: boolean;
+  channel?: "web" | "sms" | "ivr";
 }
 
 export interface RadicalRegionRule {

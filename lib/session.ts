@@ -1,6 +1,6 @@
 "use client";
 
-const SESSION_STORAGE_KEY = "sih_citizen_session_id";
+const SESSION_STORAGE_KEY = "momentum_citizen_session_id";
 
 /**
  * Retrieves the deterministic IP-based session ID from `/api/session`.

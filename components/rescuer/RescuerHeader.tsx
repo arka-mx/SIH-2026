@@ -33,9 +33,16 @@ export function RescuerHeader({
 }: RescuerHeaderProps) {
   const router = useRouter();
 
-  function handleUnitSwitch(e: React.ChangeEvent<HTMLSelectElement>) {
-    const selectedId = e.target.value;
-    router.push(`/rescuer/${selectedId}`);
+  async function handleLogout() {
+    try {
+      const res = await fetch("/api/auth/rescuer-logout", { method: "POST" });
+      if (res.ok) {
+        router.push("/rescuer/login");
+        router.refresh();
+      }
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
   }
 
   function getStatusStyle(st: string) {
@@ -59,21 +66,11 @@ export function RescuerHeader({
           <span className="font-extrabold tracking-wider text-base text-white">RESCUER FIELD PORTAL</span>
         </div>
 
-        {/* Rescuer Unit Selector Dropdown */}
+        {/* Static Unit label (prevents changing routes manually on frontend) */}
         <div className="hidden md:flex items-center gap-2 bg-stone-800/90 border border-stone-700 px-3 py-1.5 rounded-lg text-xs">
           <UserCheck size={14} className="text-emerald-400" />
           <span className="text-stone-400 font-medium">Unit:</span>
-          <select
-            value={currentRescuerId}
-            onChange={handleUnitSwitch}
-            className="bg-transparent text-white font-semibold outline-none cursor-pointer text-xs"
-          >
-            {MOCK_RESCUER_UNITS.map((unit) => (
-              <option key={unit.id} value={unit.id} className="bg-stone-900 text-white">
-                {unit.name} ({unit.id})
-              </option>
-            ))}
-          </select>
+          <span className="text-white font-bold">{rescuerName} ({currentRescuerId})</span>
         </div>
       </div>
 
@@ -88,8 +85,15 @@ export function RescuerHeader({
           href="/"
           className="text-xs bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all"
         >
-          <Home size={14} /> <span className="hidden sm:inline">Command Center</span>
+          <Home size={14} /> <span className="hidden sm:inline">Home</span>
         </Link>
+
+        <button
+          onClick={handleLogout}
+          className="text-xs bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all cursor-pointer font-bold uppercase"
+        >
+          Logout
+        </button>
       </div>
     </header>
   );

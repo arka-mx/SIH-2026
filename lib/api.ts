@@ -172,6 +172,7 @@ export async function apiSubmitCitizenResponse(resp: Partial<CitizenResponse>): 
     locationName: resp.locationName || "Target Location",
     isRadicalRegion: resp.isRadicalRegion || true,
     autoAlertTriggered: resp.autoAlertTriggered || true,
+    channel: resp.channel || "web",
   };
   inMemoryCitizenResponses.unshift(item);
   return item;

@@ -3,8 +3,16 @@ import mongoose from "mongoose";
 import { ResourceModel } from "../lib/models/Resource";
 import { ReportModel } from "../lib/models/Report";
 import { AllocationModel } from "../lib/models/Allocation";
+import { AdminUserModel } from "../lib/models/AdminUser";
+import crypto from "crypto";
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/sih-2026";
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/momentum";
+
+function hashPassword(password: string) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, "sha512").toString("hex");
+  return { salt, hash };
+}
 
 // Mumbai Center: 19.0760, 72.8777
 const initialResources = [
@@ -62,11 +70,22 @@ async function seed() {
   await AllocationModel.deleteMany({});
   await ReportModel.deleteMany({});
   await ResourceModel.deleteMany({});
+  await AdminUserModel.deleteMany({});
 
   console.log("  🗑️ Cleared existing data.");
 
   await ResourceModel.insertMany(initialResources);
   console.log(`  ✅ Seeded ${initialResources.length} resources into MongoDB.`);
+
+  const { salt, hash } = hashPassword("admin123");
+  await AdminUserModel.create({
+    username: "admin",
+    passwordHash: hash,
+    passwordSalt: salt,
+    name: "Command Coordinator",
+    role: "coordinator"
+  });
+  console.log("  ✅ Seeded default coordinator user (admin / admin123).");
 
   await mongoose.disconnect();
   console.log("🎉 Seed finished successfully!");
