@@ -6,6 +6,7 @@ import {
   MapPin,
   Send,
   HandHeart,
+  Camera,
   Navigation,
   CheckCircle2,
   X,
@@ -826,6 +827,41 @@ export function CitizenDashboard() {
                       <option value="fire">{t.fire}</option>
                       <option value="other">{t.other}</option>
                     </select>
+                  </label>
+
+                  <label className="adm-field">
+                    <span>
+                      <Camera size={13} /> Photo <span style={{ opacity: 0.6 }}>(optional — helps responders assess)</span>
+                    </span>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handlePhotoChange}
+                    />
+                    {photoPreview && (
+                      <div style={{ marginTop: 10 }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={photoPreview}
+                          alt="Selected evidence"
+                          style={{ width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 8 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedPhoto(null);
+                            setPhotoPreview(null);
+                            if (fileInputRef.current) fileInputRef.current.value = "";
+                          }}
+                          className="adm-btn"
+                          style={{ marginTop: 8, width: "100%", justifyContent: "center" }}
+                        >
+                          <X size={13} /> Remove photo
+                        </button>
+                      </div>
+                    )}
                   </label>
 
                   <div className="cz-modal__actions">

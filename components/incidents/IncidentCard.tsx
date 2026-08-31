@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, Send, CheckCircle2, AlertCircle, XCircle, Sparkles, Route } from "lucide-react";
+import { MapPin, Send, CheckCircle2, AlertCircle, XCircle, Sparkles, Route, Bot, ShieldAlert } from "lucide-react";
 import { ReportItem, ResourceItem, apiGetShortlist, apiConfirmAllocation, apiResolveIncident, apiUpdateResourceStatus, apiDenyIncidentAndAutoRoute, apiConfirmIncident } from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 import { VerificationBadge, VerificationPanel } from "@/components/incidents/VerificationBadge";
@@ -193,11 +193,54 @@ export function IncidentCard({
 
       {incident.photo_url && (
         <div className="mt-2">
-          <img 
-            src={incident.photo_url.startsWith("http") ? incident.photo_url : `http://localhost:4000${incident.photo_url}`} 
+          <img
+            src={incident.photo_url}
             alt="Incident evidence"
             className="w-full h-28 object-cover rounded-lg border border-stone-200"
           />
+        </div>
+      )}
+
+      {incident.ai_enrichment && (
+        <div className="mt-3 border border-violet-200 bg-violet-50/70 p-2.5">
+          <div className="flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-wide text-violet-700">
+            <span className="flex items-center gap-1.5">
+              <Bot size={12} /> AI situation read
+            </span>
+            <span className="flex items-center gap-1.5 normal-case font-semibold">
+              <span className="border border-violet-300 px-1 py-0.5 capitalize">
+                {incident.ai_enrichment.severity}
+              </span>
+              {incident.ai_enrichment.credibility !== "genuine" && (
+                <span className="flex items-center gap-0.5 text-amber-700">
+                  <ShieldAlert size={11} /> {incident.ai_enrichment.credibility}
+                </span>
+              )}
+            </span>
+          </div>
+          <p className="mt-1.5 text-xs text-slate-800">{incident.ai_enrichment.summary}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600">
+            {!incident.ai_enrichment.type_match && (
+              <span className="text-amber-700">
+                ⚠ Photo/text looks more like “{incident.ai_enrichment.type_suggestion}”
+              </span>
+            )}
+            {incident.ai_enrichment.people_at_risk != null && (
+              <span>~{incident.ai_enrichment.people_at_risk} people at risk</span>
+            )}
+            {incident.ai_enrichment.language &&
+              incident.ai_enrichment.language !== "English" && (
+                <span>Reported in {incident.ai_enrichment.language}</span>
+              )}
+          </div>
+          {incident.ai_enrichment.hazards.length > 0 && (
+            <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+              Hazards: {incident.ai_enrichment.hazards.join(" · ")}
+            </p>
+          )}
+          <p className="mt-1 text-[10px] text-violet-400">
+            Advisory only — does not affect the confidence score or dispatch.
+          </p>
         </div>
       )}
 

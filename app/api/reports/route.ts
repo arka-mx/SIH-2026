@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { processRescueSubmission } from "@/lib/rescueStore";
 import { connectToDatabase } from "@/lib/mongodb";
 import { ReportModel } from "@/lib/models/Report";
-import { writeFile } from "fs/promises";
-import path from "path";
+import { storeImage } from "@/lib/imageStore";
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,13 +33,10 @@ export async function POST(req: NextRequest) {
       reporter_name = (formData.get("reporter_name") as string) || "";
 
       const photoFile = formData.get("photo") as File | null;
-      if (photoFile && photoFile.name) {
-        const bytes = await photoFile.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-        const filename = `photo-${Date.now()}-${photoFile.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-        const filePath = path.join(process.cwd(), "public", "uploads", filename);
-        await writeFile(filePath, buffer);
-        photo_url = `/uploads/${filename}`;
+      if (photoFile && photoFile.name && photoFile.size > 0) {
+        const buffer = Buffer.from(await photoFile.arrayBuffer());
+        const stored = await storeImage(buffer, photoFile.name, photoFile.type);
+        if (stored) photo_url = stored.url;
       }
     } else {
       const body = await req.json();
@@ -81,6 +77,7 @@ export async function POST(req: NextRequest) {
       reporter_name,
       reporter_kind,
       has_photo: !!photo_url,
+      photo_url,
     });
 
     const formattedReport = {
@@ -102,6 +99,7 @@ export async function POST(req: NextRequest) {
       report_count: result.incident.report_count,
       verification: result.incident.verification,
       confirmations: result.incident.confirmations,
+      ai_enrichment: result.incident.ai_enrichment ?? null,
     };
 
     return NextResponse.json({ report: formattedReport, action: result.action }, { status: result.action === "CREATED" ? 201 : 200 });
@@ -136,6 +134,7 @@ export async function GET(req: NextRequest) {
       report_count: inc.report_count,
       verification: inc.verification,
       confirmations: inc.confirmations,
+      ai_enrichment: inc.ai_enrichment ?? null,
     }));
 
     return NextResponse.json(formatted);
