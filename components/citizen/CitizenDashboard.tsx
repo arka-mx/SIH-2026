@@ -388,6 +388,9 @@ export function CitizenDashboard() {
   const dispatched = Boolean(submittedReport?.assigned_rescuer);
   const reportOpen =
     !!submittedReport && submittedReport.status !== "resolved" && submittedReport.status !== "cancelled";
+  const hasActiveSos =
+    (!!submittedReport && submittedReport.status !== "resolved" && submittedReport.status !== "cancelled") ||
+    (!!activeExistingReport && activeExistingReport.status !== "resolved" && activeExistingReport.status !== "cancelled");
   const resendCountdown = (() => {
     const total = Math.ceil(resendMsLeft / 1000);
     return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
