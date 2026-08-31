@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { IncidentList } from "@/components/incidents/IncidentList";
 import {
@@ -14,7 +14,9 @@ import { RotateCw, ShieldCheck, HandHeart, Phone, MapPin, Crown, Building } from
 import { Badge } from "@/components/ui/Badge";
 import { useSearchParams } from "next/navigation";
 
-export default function VerifiedPage() {
+export const dynamic = "force-dynamic";
+
+function VerifiedPageContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab") === "pledges" ? "pledges" : "incidents";
   const [activeTab, setActiveTab] = useState<"incidents" | "pledges">(initialTab);
@@ -228,5 +230,17 @@ export default function VerifiedPage() {
         )
       )}
     </AdminShell>
+  );
+}
+
+export default function VerifiedPage() {
+  return (
+    <Suspense fallback={
+      <AdminShell>
+        <div className="empty-state"><p>Loading verified records…</p></div>
+      </AdminShell>
+    }>
+      <VerifiedPageContent />
+    </Suspense>
   );
 }
