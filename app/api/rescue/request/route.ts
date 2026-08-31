@@ -4,6 +4,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { IncidentModel } from "@/lib/models/Incident";
 import { ReportEventModel } from "@/lib/models/ReportEvent";
 import { ClientModel } from "@/lib/models/Client";
+import { storeImage } from "@/lib/imageStore";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +18,7 @@ export async function POST(req: NextRequest) {
     let location_accuracy = 10;
     let address = "";
     let reporter_name = "";
+    let photo_url: string | undefined = undefined;
 
     // Parse IP Address from headers
     const forwardedFor = req.headers.get("x-forwarded-for");
@@ -33,6 +35,13 @@ export async function POST(req: NextRequest) {
       longitude = parseFloat((formData.get("lng") as string) || (formData.get("longitude") as string) || "0");
       address = (formData.get("address") as string) || "";
       reporter_name = (formData.get("reporter_name") as string) || "";
+
+      const photoFile = formData.get("photo") as File | null;
+      if (photoFile && photoFile.name && photoFile.size > 0) {
+        const bytes = Buffer.from(await photoFile.arrayBuffer());
+        const stored = await storeImage(bytes, photoFile.name, photoFile.type);
+        if (stored) photo_url = stored.url;
+      }
     } else {
       const body = await req.json();
       if (!device_id) device_id = body.device_id || body.session_id || "";
@@ -73,6 +82,8 @@ export async function POST(req: NextRequest) {
       idempotency_key: idempotency_key.trim() || undefined,
       address,
       reporter_name: reporter_name.trim() || undefined,
+      has_photo: !!photo_url,
+      photo_url,
       reporter_kind: ((): "citizen" | "responder" | "authority" => {
         const k = (req.headers.get("x-reporter-kind") || "").toLowerCase();
         return k === "responder" || k === "authority" ? k : "citizen";

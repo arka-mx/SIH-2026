@@ -8,6 +8,7 @@ import { dispatchEmergencyAlert } from "@/lib/emergencyAlertStore";
 import { estimateDemand, rankResources } from "@/lib/allocationEngine";
 import { releaseCapacity, snapshotResources } from "@/lib/resourceStore";
 import { resolveAllocationForReport, upsertRecommendation } from "@/lib/allocationStore";
+import type { AiReportEnrichment } from "@/lib/ai/reportEnrichment";
 
 export interface RecommendedAllocationSummary {
   resource_id: string;
@@ -74,6 +75,16 @@ export interface ActiveRescueIncident {
   manually_verified?: boolean;
   /** Latest output of the Report Verification System. */
   verification?: VerificationResult;
+  /** Public URL of the first photo attached to this incident, if any. */
+  photo_url?: string;
+  /**
+   * Advisory read of the report's *content* by Gemini (summary, severity,
+   * hazards, photo/type match, credibility, language). Never affects the
+   * verification score or dispatch — an operator still decides. Populated
+   * asynchronously shortly after the incident is created.
+   */
+  ai_enrichment?: AiReportEnrichment | null;
+  ai_enriched_at?: string;
   /**
    * Auto-computed best resource match, refreshed while the incident is verified
    * and not yet dispatched. Non-binding — an operator confirms it to allocate.
@@ -108,6 +119,7 @@ export interface SubmitRescuePayload {
   reporter_kind?: "citizen" | "responder" | "authority";
   has_photo?: boolean;
   has_video?: boolean;
+  photo_url?: string;
 }
 
 export interface RescueSubmissionResult {
@@ -218,6 +230,7 @@ export async function processRescueSubmission(payload: SubmitRescuePayload): Pro
         confirmations: existingInc.confirmations || [],
         has_photo: existingInc.has_photo || payload.has_photo,
         has_video: existingInc.has_video || payload.has_video,
+        photo_url: existingInc.photo_url || payload.photo_url,
         updated_at: nowIso,
       };
 
@@ -271,12 +284,18 @@ export async function processRescueSubmission(payload: SubmitRescuePayload): Pro
         confirmations: [],
         has_photo: payload.has_photo,
         has_video: payload.has_video,
+        photo_url: payload.photo_url,
         created_at: nowIso,
         updated_at: nowIso,
       };
 
       newInc = applyVerification(newInc);
       inMemoryIncidents.unshift(newInc);
+
+      // Fire-and-forget: let Gemini read the report's text + photo and attach an
+      // advisory situation read. Off the critical path — the SOS is already
+      // stored and scored regardless of whether this resolves or fails.
+      void enrichIncidentInBackground(newInc);
 
       result = {
         success: true,
@@ -299,6 +318,40 @@ export async function processRescueSubmission(payload: SubmitRescuePayload): Pro
     return result;
   } finally {
     releaseLock();
+  }
+}
+
+/* ─────────────────────────── AI Enrichment ──────────────────────────────── */
+
+/**
+ * Ask Gemini for an advisory read of a freshly-created incident and stash it on
+ * the incident. Best-effort and non-blocking: any failure is logged and
+ * swallowed, the incident is untouched. Dynamically imported so the AI module
+ * (and its `fs` usage) never loads unless an SOS actually comes in.
+ */
+async function enrichIncidentInBackground(inc: ActiveRescueIncident): Promise<void> {
+  try {
+    const { enrichReport } = await import("@/lib/ai/reportEnrichment");
+    const enrichment = await enrichReport({
+      type: inc.type,
+      description: inc.description,
+      address: inc.address,
+      reporter_name: inc.reporter_name,
+      latitude: inc.latitude,
+      longitude: inc.longitude,
+      photo_url: inc.photo_url,
+    });
+    if (!enrichment) return;
+
+    const index = inMemoryIncidents.findIndex((i) => i.id === inc.id);
+    if (index === -1) return;
+    inMemoryIncidents[index] = {
+      ...inMemoryIncidents[index],
+      ai_enrichment: enrichment,
+      ai_enriched_at: enrichment.generated_at,
+    };
+  } catch (err) {
+    console.warn("[rescueStore] AI enrichment failed:", (err as Error).message);
   }
 }
 

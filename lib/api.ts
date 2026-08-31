@@ -14,6 +14,8 @@ import {
 
 import type { VerificationResult } from "@/lib/reportVerification";
 export type { VerificationResult, VerificationTier } from "@/lib/reportVerification";
+import type { AiReportEnrichment } from "@/lib/ai/reportEnrichment";
+export type { AiReportEnrichment } from "@/lib/ai/reportEnrichment";
 
 export type {
   RescuerSupply,
@@ -91,6 +93,8 @@ export interface ReportItem {
   severity?: "critical" | "high" | "moderate" | "low";
   /** Auto-allocation best-match while verified and not yet dispatched. */
   recommended_allocation?: RecommendedAllocation | null;
+  /** Advisory Gemini read of the report content — never gates dispatch. */
+  ai_enrichment?: AiReportEnrichment | null;
 }
 
 export interface RecommendedAllocation {

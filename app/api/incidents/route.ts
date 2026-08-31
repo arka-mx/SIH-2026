@@ -29,6 +29,8 @@ export async function GET() {
     verification: inc.verification,
     confirmations: inc.confirmations,
     has_photo: inc.has_photo,
+    photo_url: inc.photo_url,
+    ai_enrichment: inc.ai_enrichment ?? null,
   }));
 
   try {
