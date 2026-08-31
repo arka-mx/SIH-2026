@@ -400,7 +400,7 @@ export function CitizenDashboard() {
 
   return (
     <div data-no-translate style={{ display: "contents" }}>
-      <div className="page-heading">
+      <div className="page-heading flex items-start justify-between flex-wrap gap-4">
         <div>
           <p className="eyebrow">{t.desk}</p>
           <h1>{t.title}</h1>
@@ -414,33 +414,77 @@ export function CitizenDashboard() {
       </div>
 
       <div className="cz-actions">
-        <button type="button" onClick={() => setIsModalOpen(true)} className="cz-hero">
-          <div className="flex items-center gap-4">
-            <span className="cz-hero__icon">
-              <AlertTriangle size={22} />
-            </span>
-            <div>
-              <span className="cz-hero__eyebrow">No sign-in needed</span>
-              <h2>Report an emergency</h2>
-              <p>Auto location and disaster type. Sent straight to dispatch.</p>
+        {activePledge ? (
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="cz-hero border-amber-300 bg-amber-50/50 opacity-90"
+          >
+            <div className="flex items-center gap-4">
+              <span className="cz-hero__icon bg-amber-100 text-amber-800 border border-amber-300">
+                <AlertTriangle size={22} />
+              </span>
+              <div>
+                <span className="cz-hero__eyebrow text-amber-900 font-bold">Pledge Active (Cancel to SOS)</span>
+                <h2 className="text-amber-950">Report an emergency</h2>
+                <p className="text-amber-800 font-medium">Cancel active pledge first to submit SOS.</p>
+              </div>
             </div>
-          </div>
-          <span className="cz-hero__cta">Open →</span>
-        </button>
+            <span className="cz-hero__cta text-amber-900 font-bold">Manage 🔒</span>
+          </button>
+        ) : (
+          <button type="button" onClick={() => setIsModalOpen(true)} className="cz-hero">
+            <div className="flex items-center gap-4">
+              <span className="cz-hero__icon">
+                <AlertTriangle size={22} />
+              </span>
+              <div>
+                <span className="cz-hero__eyebrow">No sign-in needed</span>
+                <h2>Report an emergency</h2>
+                <p>Auto location and disaster type. Sent straight to dispatch.</p>
+              </div>
+            </div>
+            <span className="cz-hero__cta">Open →</span>
+          </button>
+        )}
 
-        <Link href="/citizen/volunteer" className="cz-hero cz-hero--secondary">
-          <div className="flex items-center gap-4">
-            <span className="cz-hero__icon">
-              <HandHeart size={22} />
-            </span>
-            <div>
-              <span className="cz-hero__eyebrow">Community pool</span>
-              <h2>Pledge a resource</h2>
-              <p>Boats, vehicles, shelter space, or your time.</p>
+        {hasActiveSos ? (
+          <button
+            type="button"
+            onClick={() =>
+              setError(
+                "You currently have an active SOS Emergency Report open. Please cancel your active SOS before pledging resources."
+              )
+            }
+            className="cz-hero cz-hero--secondary opacity-60 cursor-not-allowed border-amber-300 bg-amber-50/50"
+          >
+            <div className="flex items-center gap-4">
+              <span className="cz-hero__icon bg-amber-100 text-amber-800 border border-amber-300">
+                <HandHeart size={22} />
+              </span>
+              <div>
+                <span className="cz-hero__eyebrow text-amber-900 font-bold">Blocked by Active SOS</span>
+                <h2 className="text-amber-950">Pledge a resource</h2>
+                <p className="text-amber-800 font-medium">Cancel active SOS to enable pledging.</p>
+              </div>
             </div>
-          </div>
-          <span className="cz-hero__cta">Add →</span>
-        </Link>
+            <span className="cz-hero__cta text-amber-900 font-bold">Blocked 🔒</span>
+          </button>
+        ) : (
+          <Link href="/citizen/volunteer" className="cz-hero cz-hero--secondary">
+            <div className="flex items-center gap-4">
+              <span className="cz-hero__icon">
+                <HandHeart size={22} />
+              </span>
+              <div>
+                <span className="cz-hero__eyebrow">Community pool</span>
+                <h2>Pledge a resource</h2>
+                <p>Boats, vehicles, shelter space, or your time.</p>
+              </div>
+            </div>
+            <span className="cz-hero__cta">Add →</span>
+          </Link>
+        )}
       </div>
 
       {/* Active Volunteer Pledge Card */}

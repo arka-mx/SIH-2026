@@ -13,6 +13,7 @@ import {
 } from "@/lib/api";
 import { VolunteerPledge } from "@/types/rescuer";
 import { getOrCreateDeviceId } from "@/lib/device";
+import { getCachedActiveReport } from "@/lib/citizenSession";
 import Link from "next/link";
 
 export function VolunteerForm() {
@@ -31,10 +32,18 @@ export function VolunteerForm() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [activeSos, setActiveSos] = useState<ReportItem | null>(null);
+  const [activeSos, setActiveSos] = useState<ReportItem | null>(() => {
+    const cached = getCachedActiveReport();
+    if (cached && cached.status !== "resolved" && cached.status !== "cancelled") {
+      return cached;
+    }
+    return null;
+  });
   const [activePledge, setActivePledge] = useState<VolunteerPledge | null>(null);
   const [cancellingSos, setCancellingSos] = useState(false);
   const [cancellingPledge, setCancellingPledge] = useState(false);
+
+  const hasActiveSos = !!activeSos && activeSos.status !== "resolved" && activeSos.status !== "cancelled";
 
   async function checkUserStatuses() {
     try {
@@ -393,13 +402,13 @@ export function VolunteerForm() {
         </div>
 
         <button
-          className="adm-btn adm-btn--primary"
+          className={`adm-btn ${hasActiveSos ? "adm-btn--danger opacity-50 cursor-not-allowed" : "adm-btn--primary"}`}
           type="submit"
-          disabled={loading}
+          disabled={loading || hasActiveSos}
           style={{ width: "max-content" }}
         >
           <Send size={14} />
-          {loading ? "Registering…" : "Pledge resource"}
+          {hasActiveSos ? "Pledging Blocked (Cancel Active SOS First)" : loading ? "Registering…" : "Pledge resource"}
         </button>
       </form>
     </>
